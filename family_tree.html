@@ -1,0 +1,1270 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Family Tree</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@400;500;600&display=swap">
+
+  <style>
+    :root {
+      color-scheme: light;
+      box-sizing: border-box;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      --bg: #f8f6f2;
+      --bg2: #ffffff;
+      --fg: #1a1714;
+      --fg2: #5a5550;
+      --fg3: #9a948e;
+      --accent: #7c5c3a;
+      --accent2: #c9a97a;
+      --line: #d4c5b0;
+      --node-bg: #ffffff;
+      --node-border: #e0d4c3;
+      --panel-bg: #ffffff;
+      --shadow: 0 2px 12px rgba(100,80,50,0.10);
+      --shadow-hover: 0 6px 24px rgba(100,80,50,0.18);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #1a1714;
+        --bg2: #231f1b;
+        --fg: #f0ebe4;
+        --fg2: #b0a898;
+        --fg3: #6e6760;
+        --accent: #c9a97a;
+        --accent2: #7c5c3a;
+        --line: #3a332b;
+        --node-bg: #2a2420;
+        --node-border: #3d352c;
+        --panel-bg: #231f1b;
+        --shadow: 0 2px 12px rgba(0,0,0,0.35);
+        --shadow-hover: 0 6px 24px rgba(0,0,0,0.5);
+        color-scheme: dark;
+      }
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #1a1714;
+      --bg2: #231f1b;
+      --fg: #f0ebe4;
+      --fg2: #b0a898;
+      --fg3: #6e6760;
+      --accent: #c9a97a;
+      --accent2: #7c5c3a;
+      --line: #3a332b;
+      --node-bg: #2a2420;
+      --node-border: #3d352c;
+      --panel-bg: #231f1b;
+      --shadow: 0 2px 12px rgba(0,0,0,0.35);
+      --shadow-hover: 0 6px 24px rgba(0,0,0,0.5);
+      color-scheme: dark;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: 'Inter', system-ui, sans-serif;
+      overflow: hidden;
+    }
+
+    img { max-width: 100%; }
+    [hidden]:not([hidden=until-found i]) { display: none !important; }
+
+    #app { display: flex; flex-direction: column; height: 100%; }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem max(16px, env(safe-area-inset-left, 0px));
+      padding-right: max(16px, env(safe-area-inset-right, 0px));
+      background: var(--bg2);
+      border-bottom: 1px solid var(--node-border);
+      gap: 0.75rem;
+      flex-shrink: 0;
+      z-index: 20;
+    }
+
+    .header-left { display: flex; align-items: center; gap: 0.75rem; }
+
+    h1 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+
+    .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+    button {
+      font-family: inherit;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 0.4rem 0.8rem;
+      transition: background 0.15s, transform 0.1s;
+    }
+    button:active { transform: scale(0.97); }
+
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent2); color: var(--fg); }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--fg2);
+      border: 1px solid var(--node-border);
+    }
+    .btn-ghost:hover { background: var(--node-bg); color: var(--fg); }
+
+    .btn-icon {
+      padding: 0.4rem 0.5rem;
+      font-size: 1rem;
+      line-height: 1;
+      background: transparent;
+      color: var(--fg2);
+      border: 1px solid var(--node-border);
+    }
+    .btn-icon:hover { background: var(--node-bg); color: var(--fg); }
+
+    #canvas-wrap {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      cursor: grab;
+    }
+    #canvas-wrap.panning { cursor: grabbing; }
+
+    #tree-canvas {
+      position: absolute;
+      top: 0; left: 0;
+      transform-origin: 0 0;
+    }
+
+    .gen-label {
+      position: absolute;
+      left: 0;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--fg3);
+      pointer-events: none;
+      white-space: nowrap;
+      padding-left: max(16px, env(safe-area-inset-left, 0px));
+    }
+
+    .person-node {
+      position: absolute;
+      width: 110px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      cursor: pointer;
+    }
+
+    .node-photo {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 3px solid var(--node-border);
+      overflow: hidden;
+      background: var(--node-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      flex-shrink: 0;
+      position: relative;
+      box-shadow: var(--shadow);
+    }
+
+    .person-node:hover .node-photo,
+    .person-node.selected .node-photo {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+    }
+
+    .node-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    .node-initials {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .node-name {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--fg);
+      text-align: center;
+      line-height: 1.3;
+      max-width: 100px;
+      text-wrap: balance;
+    }
+
+    .node-years {
+      font-size: 0.6875rem;
+      color: var(--fg3);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .partner-heart {
+      position: absolute;
+      font-size: 0.875rem;
+      color: var(--accent2);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* Side panel */
+    #panel {
+      position: fixed;
+      top: 0; right: 0;
+      height: 100%;
+      width: min(360px, 100vw);
+      background: var(--panel-bg);
+      border-left: 1px solid var(--node-border);
+      transform: translateX(100%);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 100;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    #panel.open { transform: translateX(0); }
+
+    .panel-header {
+      position: sticky;
+      top: 0;
+      background: var(--panel-bg);
+      border-bottom: 1px solid var(--node-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.25rem;
+      z-index: 1;
+    }
+    .panel-header h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--fg);
+    }
+
+    .panel-body { padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem; }
+
+    .photo-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .photo-big {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 3px solid var(--accent);
+      background: var(--node-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .photo-big img { width: 100%; height: 100%; object-fit: cover; }
+    .photo-big .photo-initials {
+      font-family: 'Playfair Display', serif;
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .photo-big .photo-overlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0;
+      transition: opacity 0.2s;
+      border-radius: 50%;
+      font-size: 0.75rem;
+      color: #fff;
+      font-weight: 600;
+      text-align: center;
+    }
+    .photo-big:hover .photo-overlay { opacity: 1; }
+    #photo-input { display: none; }
+
+    .field { display: flex; flex-direction: column; gap: 0.35rem; }
+    .field label { font-size: 0.75rem; font-weight: 600; color: var(--fg2); letter-spacing: 0.04em; text-transform: uppercase; }
+    .field input, .field textarea, .field select {
+      font-family: inherit;
+      font-size: 0.875rem;
+      color: var(--fg);
+      background: var(--bg);
+      border: 1px solid var(--node-border);
+      border-radius: 6px;
+      padding: 0.5rem 0.65rem;
+      width: 100%;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+    .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--accent); }
+    .field textarea { resize: vertical; min-height: 60px; }
+    .field select option { background: var(--bg2); }
+
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+    .rel-section { display: flex; flex-direction: column; gap: 0.5rem; }
+    .rel-section h3 { font-size: 0.8125rem; font-weight: 600; color: var(--fg2); letter-spacing: 0.03em; }
+
+    .rel-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; min-height: 1.5rem; }
+    .rel-tag {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 20px;
+      background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+      color: var(--accent);
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+      transition: background 0.15s;
+    }
+    .rel-tag:hover { background: color-mix(in srgb, var(--accent) 22%, var(--bg)); }
+    .rel-tag.remove::after { content: " \00d7"; }
+
+    .rel-add-row { display: flex; gap: 0.5rem; align-items: center; }
+    .rel-add-row select { flex: 1; font-family: inherit; font-size: 0.8125rem; color: var(--fg); background: var(--bg); border: 1px solid var(--node-border); border-radius: 6px; padding: 0.4rem 0.5rem; outline: none; }
+    .rel-add-row select:focus { border-color: var(--accent); }
+    .rel-add-row button { flex-shrink: 0; }
+
+    .panel-actions { display: flex; gap: 0.5rem; padding: 1rem 1.25rem; border-top: 1px solid var(--node-border); margin-top: auto; }
+    .panel-actions button { flex: 1; padding: 0.6rem; }
+
+    .btn-danger { background: transparent; color: #c0392b; border: 1px solid #c0392b; }
+    .btn-danger:hover { background: rgba(192,57,43,0.1); }
+
+    #zoom-controls {
+      position: fixed;
+      bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+      right: max(1.25rem, env(safe-area-inset-right, 0px));
+      display: flex;
+      gap: 0.35rem;
+      z-index: 10;
+    }
+
+    #modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 200;
+      display: flex; align-items: center; justify-content: center;
+      padding: 1rem;
+    }
+    #modal-backdrop[hidden] { display: none; }
+
+    #modal {
+      background: var(--panel-bg);
+      border-radius: 12px;
+      width: min(420px, 100%);
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-hover);
+      display: flex; flex-direction: column;
+    }
+
+    .modal-header {
+      padding: 1.25rem 1.25rem 0;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-header h2 { font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 600; }
+    .modal-body { padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+    .modal-footer {
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--node-border);
+      display: flex; gap: 0.5rem; justify-content: flex-end;
+    }
+
+    /* Custom Confirm Dialog */
+    #confirm-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 250;
+      display: flex; align-items: center; justify-content: center;
+      padding: 1rem;
+    }
+    #confirm-backdrop[hidden] { display: none; }
+    #confirm-box {
+      background: var(--panel-bg);
+      border-radius: 12px;
+      width: min(340px, 100%);
+      padding: 1.25rem;
+      box-shadow: var(--shadow-hover);
+      display: flex; flex-direction: column; gap: 1rem;
+    }
+    #confirm-box p { font-size: 0.9rem; color: var(--fg); line-height: 1.4; }
+    .confirm-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+
+    #connector-svg {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+    .connector-line { stroke: var(--line); stroke-width: 2; fill: none; }
+    .partner-line { stroke: var(--accent2); stroke-width: 2; stroke-dasharray: 5 3; fill: none; }
+
+    #empty-state {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 1rem; color: var(--fg3);
+      pointer-events: none;
+    }
+    #empty-state.hidden { display: none; }
+    .empty-icon { font-size: 3rem; }
+    .empty-title { font-family: 'Playfair Display', serif; font-size: 1.25rem; color: var(--fg2); }
+    .empty-sub { font-size: 0.875rem; text-align: center; max-width: 280px; }
+
+    @media (max-width: 480px) {
+      h1 { font-size: 1rem; }
+      #panel { width: 100vw; }
+      .field-row { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <div class="header-left">
+      <h1>Family Tree</h1>
+    </div>
+    <div class="header-actions">
+      <button class="btn-ghost btn-icon" id="btn-theme" title="Toggle theme">&#9788;&#65038;</button>
+      <button class="btn-ghost btn-icon" id="btn-fit" title="Fit to screen">&#8861;</button>
+      <button class="btn-primary" id="btn-add">+ Add person</button>
+    </div>
+  </header>
+
+  <div id="canvas-wrap">
+    <div id="tree-canvas">
+      <svg id="connector-svg"></svg>
+    </div>
+    <div id="empty-state" class="hidden">
+      <div class="empty-icon">&#127795;</div>
+      <div class="empty-title">Your family tree awaits</div>
+      <div class="empty-sub">Click <strong>+ Add person</strong> to place your first family member.</div>
+    </div>
+  </div>
+
+  <div id="zoom-controls">
+    <button class="btn-icon" id="btn-zoom-out" title="Zoom out">&#8722;</button>
+    <button class="btn-icon" id="btn-zoom-in" title="Zoom in">+</button>
+  </div>
+</div>
+
+<!-- Side panel -->
+<div id="panel" role="dialog" aria-label="Edit person">
+  <div class="panel-header">
+    <h2 id="panel-title">Edit person</h2>
+    <button class="btn-icon" id="btn-panel-close" aria-label="Close">&#10005;</button>
+  </div>
+  <div class="panel-body">
+    <div class="photo-area">
+      <div class="photo-big" id="panel-photo-btn" title="Upload photo">
+        <div class="photo-initials" id="panel-photo-initials"></div>
+        <img id="panel-photo-img" alt="Photo" style="display:none">
+        <div class="photo-overlay">Change<br>photo</div>
+      </div>
+      <input type="file" id="photo-input" accept="image/*">
+      <span style="font-size:0.75rem;color:var(--fg3)">Click to upload photo</span>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="edit-first">First name</label>
+        <input id="edit-first" type="text" placeholder="First">
+      </div>
+      <div class="field">
+        <label for="edit-last">Last name</label>
+        <input id="edit-last" type="text" placeholder="Last">
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="edit-birth">Birth year</label>
+        <input id="edit-birth" type="text" placeholder="e.g. 1950" inputmode="numeric" maxlength="4">
+      </div>
+      <div class="field">
+        <label for="edit-death">Death year</label>
+        <input id="edit-death" type="text" placeholder="Leave blank if alive" inputmode="numeric" maxlength="4">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="edit-gen">Generation Row</label>
+      <select id="edit-gen">
+        <option value="0">Great-grandparents (Gen 0)</option>
+        <option value="1">Grandparents (Gen 1)</option>
+        <option value="2">Parents (Gen 2)</option>
+        <option value="3">Children (Gen 3)</option>
+        <option value="4">Grandchildren (Gen 4)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="edit-notes">Notes</label>
+      <textarea id="edit-notes" placeholder="Occupation, hometown, story&#8230;"></textarea>
+    </div>
+
+    <!-- Parents -->
+    <div class="rel-section">
+      <h3>Parents</h3>
+      <div class="rel-tags" id="parents-tags"></div>
+      <div class="rel-add-row">
+        <select id="parent-select"><option value="">&#8212; select person &#8212;</option></select>
+        <button class="btn-ghost" id="btn-add-parent">Add</button>
+      </div>
+    </div>
+
+    <!-- Children -->
+    <div class="rel-section">
+      <h3>Children</h3>
+      <div class="rel-tags" id="children-tags"></div>
+      <div class="rel-add-row">
+        <select id="child-select"><option value="">&#8212; select person &#8212;</option></select>
+        <button class="btn-ghost" id="btn-add-child">Add</button>
+      </div>
+    </div>
+
+    <!-- Partner -->
+    <div class="rel-section">
+      <h3>Partner / Spouse</h3>
+      <div class="rel-tags" id="partner-tags"></div>
+      <div class="rel-add-row">
+        <select id="partner-select"><option value="">&#8212; select person &#8212;</option></select>
+        <button class="btn-ghost" id="btn-add-partner">Add</button>
+      </div>
+    </div>
+  </div>
+  <div class="panel-actions">
+    <button class="btn-danger" id="btn-delete">Delete</button>
+    <button class="btn-primary" id="btn-save">Save</button>
+  </div>
+</div>
+
+<!-- Add person modal -->
+<div id="modal-backdrop" hidden>
+  <div id="modal">
+    <div class="modal-header">
+      <h2>New family member</h2>
+      <button class="btn-icon" id="btn-modal-close">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-row">
+        <div class="field">
+          <label for="new-first">First name *</label>
+          <input id="new-first" type="text" placeholder="First" autofocus>
+        </div>
+        <div class="field">
+          <label for="new-last">Last name</label>
+          <input id="new-last" type="text" placeholder="Last">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="new-birth">Birth year</label>
+          <input id="new-birth" type="text" inputmode="numeric" maxlength="4" placeholder="e.g. 1980">
+        </div>
+        <div class="field">
+          <label for="new-gen">Generation</label>
+          <select id="new-gen">
+            <option value="0">Great-grandparents (Gen 0)</option>
+            <option value="1">Grandparents (Gen 1)</option>
+            <option value="2" selected>Parents (Gen 2)</option>
+            <option value="3">Children (Gen 3)</option>
+            <option value="4">Grandchildren (Gen 4)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" id="btn-modal-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-modal-create">Add to tree</button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom Confirm Modal -->
+<div id="confirm-backdrop" hidden>
+  <div id="confirm-box">
+    <p>Remove this person from the tree?</p>
+    <div class="confirm-actions">
+      <button class="btn-ghost" id="btn-confirm-cancel">Cancel</button>
+      <button class="btn-danger" id="btn-confirm-ok">Remove</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  /* ── State ── */
+  let people = [];
+  let nextId = 1;
+  let selectedId = null;
+  let panX = 0, panY = 0, zoom = 1;
+  let isPanning = false, panStart = null;
+  let theme = 'system';
+
+  const NODE_W = 110, NODE_H = 110, NODE_GAP_X = 36, NODE_GAP_Y = 60;
+  const GEN_LABELS = ['Great-grandparents', 'Grandparents', 'Parents', 'Children', 'Grandchildren'];
+  const GEN_H = NODE_H + NODE_GAP_Y;
+
+  /* ── Sample Initial Data ── */
+  function seedSampleData() {
+    people = [
+      {
+        id: 1,
+        first: 'Arthur',
+        last: 'Miller',
+        birth: '1975',
+        death: '',
+        notes: 'Architect and woodworker.',
+        photo: null,
+        gen: 2,
+        parents: [],
+        children: [3, 4, 5],
+        partners: [2]
+      },
+      {
+        id: 2,
+        first: 'Clara',
+        last: 'Miller',
+        birth: '1977',
+        death: '',
+        notes: 'Botanist and avid gardener.',
+        photo: null,
+        gen: 2,
+        parents: [],
+        children: [3, 4, 5],
+        partners: [1]
+      },
+      {
+        id: 3,
+        first: 'Liam',
+        last: 'Miller',
+        birth: '2003',
+        death: '',
+        notes: 'Studying software engineering.',
+        photo: null,
+        gen: 3,
+        parents: [1, 2],
+        children: [],
+        partners: []
+      },
+      {
+        id: 4,
+        first: 'Maya',
+        last: 'Miller',
+        birth: '2006',
+        death: '',
+        notes: 'Loves painting and track.',
+        photo: null,
+        gen: 3,
+        parents: [1, 2],
+        children: [],
+        partners: []
+      },
+      {
+        id: 5,
+        first: 'Noah',
+        last: 'Miller',
+        birth: '2010',
+        death: '',
+        notes: 'Plays cello in the youth orchestra.',
+        photo: null,
+        gen: 3,
+        parents: [1, 2],
+        children: [],
+        partners: []
+      }
+    ];
+    nextId = 6;
+    syncGenerations();
+  }
+
+  /* ── Persist ── */
+  function save() {
+    try { localStorage.setItem('ftree_v2', JSON.stringify({ people, nextId })); } catch(e) {}
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem('ftree_v2') || localStorage.getItem('ftree_v1');
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d && Array.isArray(d.people) && d.people.length > 0) {
+          people = d.people;
+          nextId = d.nextId || (Math.max(...people.map(p => p.id)) + 1);
+          people.forEach(p => {
+            if (!p.children) p.children = [];
+            if (!p.parents) p.parents = [];
+            if (!p.partners) p.partners = [];
+          });
+          people.forEach(child => {
+            (child.parents || []).forEach(parentId => {
+              const parent = people.find(x => x.id === parentId);
+              if (parent && !parent.children.includes(child.id)) {
+                parent.children.push(child.id);
+              }
+            });
+          });
+          syncGenerations();
+          return;
+        }
+      }
+    } catch(e) {}
+    // Seed sample family data if no saved tree exists yet
+    seedSampleData();
+    save();
+  }
+
+  /* ── Generation Synchronization ── */
+  // Ensures all children sit on the exact same row (parent.gen + 1) and partners align
+  function syncGenerations() {
+    let changed = true;
+    let safety = 0;
+    while (changed && safety < 20) {
+      changed = false;
+      safety++;
+      people.forEach(person => {
+        // Align child's generation to 1 row below their highest-generation parent
+        if (person.parents && person.parents.length > 0) {
+          const parentGens = person.parents
+            .map(pid => people.find(x => x.id === pid))
+            .filter(Boolean)
+            .map(p => p.gen);
+          if (parentGens.length > 0) {
+            const targetGen = Math.max(...parentGens) + 1;
+            if (person.gen !== targetGen) {
+              person.gen = targetGen;
+              changed = true;
+            }
+          }
+        }
+        // Align partners to the same row
+        if (person.partners && person.partners.length > 0) {
+          person.partners.forEach(partId => {
+            const partner = people.find(x => x.id === partId);
+            if (partner && partner.gen !== person.gen) {
+              const maxGen = Math.max(person.gen, partner.gen);
+              person.gen = maxGen;
+              partner.gen = maxGen;
+              changed = true;
+            }
+          });
+        }
+      });
+    }
+  }
+
+  /* ── DOM refs ── */
+  const canvas = document.getElementById('tree-canvas');
+  const svg = document.getElementById('connector-svg');
+  const wrap = document.getElementById('canvas-wrap');
+  const panel = document.getElementById('panel');
+  const emptyState = document.getElementById('empty-state');
+  const modal = document.getElementById('modal-backdrop');
+  const confirmModal = document.getElementById('confirm-backdrop');
+
+  /* ── Theme ── */
+  const btnTheme = document.getElementById('btn-theme');
+  btnTheme.addEventListener('click', () => {
+    theme = theme === 'system' ? 'dark' : theme === 'dark' ? 'light' : 'system';
+    applyTheme();
+    try { localStorage.setItem('ftree_theme', theme); } catch(e) {}
+  });
+  function applyTheme() {
+    const root = document.documentElement;
+    if (theme === 'dark') { root.setAttribute('data-theme', 'dark'); btnTheme.textContent = '☀︎'; }
+    else if (theme === 'light') { root.setAttribute('data-theme', 'light'); btnTheme.textContent = '🌙'; }
+    else { root.removeAttribute('data-theme'); btnTheme.textContent = '☀︎'; }
+  }
+  try { const t = localStorage.getItem('ftree_theme'); if (t) theme = t; } catch(e) {}
+  applyTheme();
+
+  /* ── Layout ── */
+  function computeLayout() {
+    const gens = {};
+    people.forEach(p => {
+      const g = p.gen;
+      if (!gens[g]) gens[g] = [];
+      gens[g].push(p);
+    });
+
+    // Sort generations top-down so sibling groups stay together on the same row
+    Object.keys(gens).sort((a, b) => Number(a) - Number(b)).forEach(g => {
+      const members = gens[g];
+      const prevGen = gens[parseInt(g) - 1] || [];
+      members.sort((a, b) => {
+        const aParent = (a.parents || []).find(pid => prevGen.some(x => x.id === pid));
+        const bParent = (b.parents || []).find(pid => prevGen.some(x => x.id === pid));
+        const aIdx = aParent ? prevGen.findIndex(x => x.id === aParent) : 999;
+        const bIdx = bParent ? prevGen.findIndex(x => x.id === bParent) : 999;
+        if (aIdx !== bIdx) return aIdx - bIdx;
+        return a.id - b.id;
+      });
+    });
+
+    const positions = {};
+    Object.entries(gens).forEach(([gen, members]) => {
+      const g = parseInt(gen);
+      const count = members.length;
+      const totalW = count * NODE_W + (count - 1) * NODE_GAP_X;
+      const startX = -totalW / 2 + NODE_W / 2;
+      members.forEach((p, i) => {
+        positions[p.id] = { x: startX + i * (NODE_W + NODE_GAP_X), y: g * GEN_H + 48 };
+      });
+    });
+    return positions;
+  }
+
+  /* ── Render ── */
+  function render() {
+    Array.from(canvas.querySelectorAll('.person-node,.partner-heart,.gen-label')).forEach(el => el.remove());
+    svg.innerHTML = '';
+    emptyState.classList.toggle('hidden', people.length > 0);
+    if (people.length === 0) return;
+
+    const pos = computeLayout();
+    const xs = Object.values(pos).map(p => p.x);
+    const ys = Object.values(pos).map(p => p.y);
+    const minX = Math.min(...xs) - NODE_W;
+    const maxX = Math.max(...xs) + NODE_W;
+    const minY = Math.min(...ys) - 60;
+    const maxY = Math.max(...ys) + NODE_H + 20;
+    const W = maxX - minX + 160;
+    const H = maxY - minY + 80;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.style.width = W + 'px';
+    svg.style.height = H + 'px';
+
+    const ox = -minX + 80;
+    const oy = -minY + 40;
+
+    // Generation labels
+    [...new Set(people.map(p => p.gen))].sort((a, b) => a - b).forEach(g => {
+      const lbl = document.createElement('div');
+      lbl.className = 'gen-label';
+      lbl.textContent = GEN_LABELS[g] || ('Generation ' + g);
+      lbl.style.top = (g * GEN_H + oy) + 'px';
+      canvas.appendChild(lbl);
+    });
+
+    // Connectors
+    const drawnPartners = new Set();
+    people.forEach(p => {
+      const pp = pos[p.id];
+      if (!pp) return;
+      const px = pp.x + ox + NODE_W / 2;
+      const py = pp.y + oy;
+
+      (p.children || []).forEach(childId => {
+        const cp = pos[childId];
+        if (!cp) return;
+        const cx = cp.x + ox + NODE_W / 2;
+        const cy = cp.y + oy;
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const my = cy - 20;
+        path.setAttribute('d', 'M' + px + ',' + (py + NODE_H) + ' C' + px + ',' + my + ' ' + cx + ',' + my + ' ' + cx + ',' + cy);
+        path.setAttribute('class', 'connector-line');
+        svg.appendChild(path);
+      });
+
+      (p.partners || []).forEach(partnerId => {
+        const key = [p.id, partnerId].sort().join('-');
+        if (drawnPartners.has(key)) return;
+        drawnPartners.add(key);
+        const par = pos[partnerId];
+        if (!par) return;
+        const parx = par.x + ox + NODE_W / 2;
+        const pary = par.y + oy + NODE_H / 2;
+        const py2 = py + NODE_H / 2;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', px); line.setAttribute('y1', py2);
+        line.setAttribute('x2', parx); line.setAttribute('y2', pary);
+        line.setAttribute('class', 'partner-line');
+        svg.appendChild(line);
+        const hx = (px + parx) / 2;
+        const hy = (py2 + pary) / 2;
+        const heart = document.createElement('div');
+        heart.className = 'partner-heart';
+        heart.textContent = '♥';
+        heart.style.left = (hx - 8) + 'px';
+        heart.style.top = (hy - 10) + 'px';
+        canvas.appendChild(heart);
+      });
+    });
+
+    // Nodes
+    people.forEach(p => {
+      const pp = pos[p.id];
+      if (!pp) return;
+      const node = document.createElement('div');
+      node.className = 'person-node' + (p.id === selectedId ? ' selected' : '');
+      node.style.left = (pp.x + ox) + 'px';
+      node.style.top = (pp.y + oy) + 'px';
+      node.dataset.id = p.id;
+
+      const photoDiv = document.createElement('div');
+      photoDiv.className = 'node-photo';
+      if (p.photo) {
+        const img = document.createElement('img');
+        img.src = p.photo; img.alt = fullName(p);
+        photoDiv.appendChild(img);
+      } else {
+        const ini = document.createElement('div');
+        ini.className = 'node-initials';
+        ini.textContent = initials(p);
+        photoDiv.appendChild(ini);
+      }
+
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'node-name';
+      nameDiv.textContent = fullName(p);
+
+      node.appendChild(photoDiv);
+      node.appendChild(nameDiv);
+
+      if (p.birth || p.death) {
+        const yr = document.createElement('div');
+        yr.className = 'node-years';
+        yr.textContent = (p.birth || '') + (p.death ? ' – ' + p.death : '');
+        node.appendChild(yr);
+      }
+
+      node.addEventListener('click', e => { e.stopPropagation(); selectPerson(p.id); });
+      canvas.appendChild(node);
+    });
+  }
+
+  function fullName(p) { return [p.first, p.last].filter(Boolean).join(' ') || 'Unnamed'; }
+  function initials(p) { return [(p.first || '')[0], (p.last || '')[0]].filter(Boolean).join('').toUpperCase() || '?'; }
+
+  /* ── Panel ── */
+  function selectPerson(id) {
+    selectedId = id;
+    const p = people.find(x => x.id === id);
+    if (!p) return;
+
+    panel.classList.add('open');
+    document.getElementById('panel-title').textContent = fullName(p);
+    document.getElementById('edit-first').value = p.first || '';
+    document.getElementById('edit-last').value = p.last || '';
+    document.getElementById('edit-birth').value = p.birth || '';
+    document.getElementById('edit-death').value = p.death || '';
+    document.getElementById('edit-gen').value = String(p.gen);
+    document.getElementById('edit-notes').value = p.notes || '';
+
+    const img = document.getElementById('panel-photo-img');
+    const ini = document.getElementById('panel-photo-initials');
+    if (p.photo) { img.src = p.photo; img.style.display = 'block'; ini.style.display = 'none'; }
+    else { img.style.display = 'none'; ini.style.display = ''; ini.textContent = initials(p); }
+
+    populateRelSelects(id);
+    renderRelTags('parents', p.parents || [], id);
+    renderRelTags('children', p.children || [], id);
+    renderRelTags('partners', p.partners || [], id);
+    render();
+  }
+
+  function populateRelSelects(currentId) {
+    const opts = people.filter(x => x.id !== currentId)
+      .map(x => '<option value="' + x.id + '">' + fullName(x) + '</option>').join('');
+    const blank = '<option value="">— select person —</option>';
+    document.getElementById('parent-select').innerHTML = blank + opts;
+    document.getElementById('child-select').innerHTML = blank + opts;
+    document.getElementById('partner-select').innerHTML = blank + opts;
+  }
+
+  function renderRelTags(type, ids, currentId) {
+    const container = document.getElementById(type + '-tags');
+    container.innerHTML = '';
+    ids.forEach(rid => {
+      const rp = people.find(x => x.id === rid);
+      if (!rp) return;
+      const tag = document.createElement('div');
+      tag.className = 'rel-tag remove';
+      tag.textContent = fullName(rp);
+      tag.addEventListener('click', () => removeRelation(type, currentId, rid));
+      container.appendChild(tag);
+    });
+  }
+
+  /* Add parent: sets parent on child, child on parent, and snaps child to parent.gen + 1 */
+  document.getElementById('btn-add-parent').addEventListener('click', () => {
+    const sel = document.getElementById('parent-select').value;
+    if (!sel || !selectedId) return;
+    const parentId = parseInt(sel);
+    const child = people.find(x => x.id === selectedId);
+    const parent = people.find(x => x.id === parentId);
+    if (!child || !parent) return;
+    if (!child.parents.includes(parentId)) child.parents.push(parentId);
+    if (!parent.children.includes(selectedId)) parent.children.push(selectedId);
+    syncGenerations();
+    document.getElementById('edit-gen').value = String(child.gen);
+    save(); render(); renderRelTags('parents', child.parents, selectedId);
+  });
+
+  /* Add child: sets child on parent, parent on child, and snaps child to parent.gen + 1 */
+  document.getElementById('btn-add-child').addEventListener('click', () => {
+    const sel = document.getElementById('child-select').value;
+    if (!sel || !selectedId) return;
+    const childId = parseInt(sel);
+    const parent = people.find(x => x.id === selectedId);
+    const child = people.find(x => x.id === childId);
+    if (!parent || !child) return;
+    if (!parent.children.includes(childId)) parent.children.push(childId);
+    if (!child.parents.includes(selectedId)) child.parents.push(selectedId);
+    syncGenerations();
+    save(); render(); renderRelTags('children', parent.children, selectedId);
+  });
+
+  /* Add partner: bidirectional and aligns partner rows */
+  document.getElementById('btn-add-partner').addEventListener('click', () => {
+    const sel = document.getElementById('partner-select').value;
+    if (!sel || !selectedId) return;
+    const rid = parseInt(sel);
+    const p = people.find(x => x.id === selectedId);
+    const other = people.find(x => x.id === rid);
+    if (!p || !other) return;
+    if (!p.partners.includes(rid)) p.partners.push(rid);
+    if (!other.partners.includes(selectedId)) other.partners.push(selectedId);
+    syncGenerations();
+    document.getElementById('edit-gen').value = String(p.gen);
+    save(); render(); renderRelTags('partners', p.partners, selectedId);
+  });
+
+  function removeRelation(type, fromId, toId) {
+    const p = people.find(x => x.id === fromId);
+    const other = people.find(x => x.id === toId);
+    if (!p) return;
+
+    if (type === 'parents') {
+      p.parents = p.parents.filter(id => id !== toId);
+      if (other) other.children = (other.children || []).filter(id => id !== fromId);
+    } else if (type === 'children') {
+      p.children = p.children.filter(id => id !== toId);
+      if (other) other.parents = (other.parents || []).filter(id => id !== fromId);
+    } else if (type === 'partners') {
+      p.partners = p.partners.filter(id => id !== toId);
+      if (other) other.partners = (other.partners || []).filter(id => id !== fromId);
+    }
+    save(); render();
+    renderRelTags(type, p[type] || [], fromId);
+  }
+
+  /* ── Save ── */
+  document.getElementById('btn-save').addEventListener('click', () => {
+    if (!selectedId) return;
+    const p = people.find(x => x.id === selectedId);
+    p.first = document.getElementById('edit-first').value.trim();
+    p.last = document.getElementById('edit-last').value.trim();
+    p.birth = document.getElementById('edit-birth').value.trim();
+    p.death = document.getElementById('edit-death').value.trim();
+    p.gen = parseInt(document.getElementById('edit-gen').value);
+    p.notes = document.getElementById('edit-notes').value.trim();
+    syncGenerations();
+    document.getElementById('edit-gen').value = String(p.gen);
+    save(); render();
+    document.getElementById('panel-title').textContent = fullName(p);
+    document.getElementById('panel-photo-initials').textContent = initials(p);
+  });
+
+  /* ── Delete (Custom Confirm Modal instead of window.confirm) ── */
+  document.getElementById('btn-delete').addEventListener('click', () => {
+    if (!selectedId) return;
+    confirmModal.hidden = false;
+  });
+
+  document.getElementById('btn-confirm-cancel').addEventListener('click', () => {
+    confirmModal.hidden = true;
+  });
+
+  confirmModal.addEventListener('click', e => {
+    if (e.target === confirmModal) confirmModal.hidden = true;
+  });
+
+  document.getElementById('btn-confirm-ok').addEventListener('click', () => {
+    confirmModal.hidden = true;
+    if (!selectedId) return;
+    const id = selectedId;
+    people = people.filter(x => x.id !== id);
+    people.forEach(p => {
+      p.parents = (p.parents || []).filter(x => x !== id);
+      p.children = (p.children || []).filter(x => x !== id);
+      p.partners = (p.partners || []).filter(x => x !== id);
+    });
+    selectedId = null;
+    panel.classList.remove('open');
+    save(); render();
+  });
+
+  /* ── Photo ── */
+  document.getElementById('panel-photo-btn').addEventListener('click', () => {
+    document.getElementById('photo-input').click();
+  });
+  document.getElementById('photo-input').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file || !selectedId) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const p = people.find(x => x.id === selectedId);
+      if (!p) return;
+      p.photo = ev.target.result;
+      const img = document.getElementById('panel-photo-img');
+      img.src = p.photo; img.style.display = 'block';
+      document.getElementById('panel-photo-initials').style.display = 'none';
+      save(); render();
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  });
+
+  /* ── Panel close ── */
+  document.getElementById('btn-panel-close').addEventListener('click', () => {
+    panel.classList.remove('open');
+    selectedId = null;
+    render();
+  });
+
+  /* ── Add person modal ── */
+  document.getElementById('btn-add').addEventListener('click', () => {
+    document.getElementById('new-first').value = '';
+    document.getElementById('new-last').value = '';
+    document.getElementById('new-birth').value = '';
+    document.getElementById('new-gen').value = '2';
+    modal.hidden = false;
+    setTimeout(() => document.getElementById('new-first').focus(), 50);
+  });
+  function closeModal() { modal.hidden = true; }
+  document.getElementById('btn-modal-close').addEventListener('click', closeModal);
+  document.getElementById('btn-modal-cancel').addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+  document.getElementById('btn-modal-create').addEventListener('click', () => {
+    const first = document.getElementById('new-first').value.trim();
+    if (!first) { document.getElementById('new-first').focus(); return; }
+    const p = {
+      id: nextId++,
+      first,
+      last: document.getElementById('new-last').value.trim(),
+      birth: document.getElementById('new-birth').value.trim(),
+      death: '', notes: '', photo: null,
+      gen: parseInt(document.getElementById('new-gen').value),
+      parents: [], children: [], partners: []
+    };
+    people.push(p);
+    save(); closeModal(); render();
+    if (people.length === 1) fitToScreen();
+  });
+
+  /* ── Pan & zoom ── */
+  function applyTransform() {
+    canvas.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+  }
+
+  wrap.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (e.target !== wrap && e.target !== canvas && e.target !== svg) return;
+    isPanning = true;
+    panStart = { x: e.clientX - panX, y: e.clientY - panY };
+    wrap.classList.add('panning');
+  });
+  window.addEventListener('mousemove', e => {
+    if (!isPanning) return;
+    panX = e.clientX - panStart.x;
+    panY = e.clientY - panStart.y;
+    applyTransform();
+  });
+  window.addEventListener('mouseup', () => { isPanning = false; wrap.classList.remove('panning'); });
+
+  let touch0 = null, touch0pan = null;
+  wrap.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) { touch0 = e.touches[0]; touch0pan = { x: panX, y: panY }; }
+  }, { passive: true });
+  wrap.addEventListener('touchmove', e => {
+    if (e.touches.length === 1 && touch0) {
+      panX = touch0pan.x + (e.touches[0].clientX - touch0.clientX);
+      panY = touch0pan.y + (e.touches[0].clientY - touch0.clientY);
+      applyTransform();
+    }
+  }, { passive: true });
+  wrap.addEventListener('touchend', () => { touch0 = null; });
+
+  wrap.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
+    const rect = wrap.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    panX = mx - (mx - panX) * factor;
+    panY = my - (my - panY) * factor;
+    zoom = Math.max(0.25, Math.min(3, zoom * factor));
+    applyTransform();
+  }, { passive: false });
+
+  document.getElementById('btn-zoom-in').addEventListener('click', () => { zoom = Math.min(3, zoom * 1.2); applyTransform(); });
+  document.getElementById('btn-zoom-out').addEventListener('click', () => { zoom = Math.max(0.25, zoom / 1.2); applyTransform(); });
+
+  function fitToScreen() {
+    if (people.length === 0) return;
+    const rect = wrap.getBoundingClientRect();
+    const cW = parseFloat(canvas.style.width) || 400;
+    const cH = parseFloat(canvas.style.height) || 400;
+    zoom = Math.min(1, Math.min(rect.width / cW, rect.height / cH) * 0.85);
+    panX = (rect.width - cW * zoom) / 2;
+    panY = (rect.height - cH * zoom) / 2;
+    applyTransform();
+  }
+
+  document.getElementById('btn-fit').addEventListener('click', fitToScreen);
+  window.addEventListener('resize', () => { if (people.length > 0) fitToScreen(); });
+
+  wrap.addEventListener('click', e => {
+    if (e.target === wrap || e.target === canvas || e.target === svg) {
+      panel.classList.remove('open');
+      selectedId = null;
+      render();
+    }
+  });
+
+  /* ── Init ── */
+  load();
+  render();
+  if (people.length > 0) fitToScreen();
+
+})();
+</script>
+
+</body>
+</html>

@@ -177,6 +177,16 @@
       padding-left: max(16px, env(safe-area-inset-left, 0px));
     }
 
+    /* Dotted rectangular enclosure around wife & husband */
+    .couple-box {
+      position: absolute;
+      border: 2px dotted var(--accent2);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--accent2) 5%, transparent);
+      pointer-events: none;
+      z-index: 1;
+    }
+
     .person-node {
       position: absolute;
       width: 110px;
@@ -185,6 +195,7 @@
       align-items: center;
       gap: 0.4rem;
       cursor: pointer;
+      z-index: 2;
     }
 
     .node-photo-wrap {
@@ -265,7 +276,10 @@
       font-size: 0.875rem;
       color: var(--accent2);
       pointer-events: none;
-      z-index: 2;
+      z-index: 3;
+      background: var(--bg);
+      padding: 0 2px;
+      border-radius: 50%;
     }
 
     /* Side panel */
@@ -382,18 +396,23 @@
     .field textarea { resize: vertical; min-height: 60px; }
     .field select option { background: var(--bg2); }
 
-    /* Color picker row & swatches */
-    .color-picker-row {
+    /* Color picker row & expanded swatches */
+    .color-picker-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .color-picker-controls {
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      flex-wrap: wrap;
     }
     input[type="color"] {
       -webkit-appearance: none;
       appearance: none;
-      width: 38px;
-      height: 36px;
+      width: 34px;
+      height: 28px;
       border: 1px solid var(--node-border);
       border-radius: 6px;
       background: var(--bg);
@@ -403,16 +422,21 @@
     }
     input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
     input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
-    .swatch-list { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; }
+    .swatch-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 26px);
+      gap: 0.4rem;
+      margin-top: 0.25rem;
+    }
     .swatch-btn {
-      width: 24px;
-      height: 24px;
+      width: 26px;
+      height: 26px;
       border-radius: 50%;
       padding: 0;
       border: 2px solid var(--node-border);
       flex-shrink: 0;
     }
-    .swatch-btn:hover { transform: scale(1.12); }
+    .swatch-btn:hover { transform: scale(1.14); border-color: var(--fg); }
 
     .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 
@@ -504,7 +528,7 @@
       pointer-events: none;
     }
     .connector-line { stroke: var(--line); stroke-width: 2; fill: none; }
-    .partner-line { stroke: var(--accent2); stroke-width: 2; stroke-dasharray: 5 3; fill: none; }
+    .partner-line { stroke: var(--accent2); stroke-width: 2; stroke-dasharray: 4 4; fill: none; }
 
     #empty-state {
       position: absolute; inset: 0;
@@ -586,20 +610,30 @@
       <button type="button" class="btn-ghost editor-only" id="btn-remove-photo" style="padding:0.25rem 0.65rem;font-size:0.75rem;" hidden>Remove Photo</button>
     </div>
 
-    <!-- Node Color Picker -->
+    <!-- Node Color Picker (14 curated swatches + custom color wheel) -->
     <div class="field editor-only" id="color-field-wrap">
-      <label for="edit-color">Node Color</label>
-      <div class="color-picker-row">
-        <input id="edit-color" type="color" value="#7c5c3a" title="Pick custom color">
-        <div class="swatch-list" id="edit-swatches">
-          <button type="button" class="swatch-btn" data-color="#7c5c3a" style="background:#7c5c3a" title="Bronze"></button>
-          <button type="button" class="swatch-btn" data-color="#2b6cb0" style="background:#2b6cb0" title="Blue"></button>
-          <button type="button" class="swatch-btn" data-color="#2f855a" style="background:#2f855a" title="Green"></button>
-          <button type="button" class="swatch-btn" data-color="#b83280" style="background:#b83280" title="Rose"></button>
-          <button type="button" class="swatch-btn" data-color="#6b46c1" style="background:#6b46c1" title="Purple"></button>
-          <button type="button" class="swatch-btn" data-color="#c05621" style="background:#c05621" title="Amber"></button>
+      <div class="color-picker-header">
+        <label for="edit-color">Node Color</label>
+        <div class="color-picker-controls">
+          <input id="edit-color" type="color" value="#7c5c3a" title="Pick any custom color">
+          <button type="button" class="btn-ghost" id="btn-reset-color" style="padding:0.2rem 0.5rem;font-size:0.75rem;">Reset</button>
         </div>
-        <button type="button" class="btn-ghost" id="btn-reset-color" style="padding:0.25rem 0.5rem;font-size:0.75rem;">Reset</button>
+      </div>
+      <div class="swatch-grid" id="edit-swatches">
+        <button type="button" class="swatch-btn" data-color="#7c5c3a" style="background:#7c5c3a" title="Bronze"></button>
+        <button type="button" class="swatch-btn" data-color="#c53030" style="background:#c53030" title="Crimson"></button>
+        <button type="button" class="swatch-btn" data-color="#c05621" style="background:#c05621" title="Terracotta"></button>
+        <button type="button" class="swatch-btn" data-color="#d69e2e" style="background:#d69e2e" title="Gold"></button>
+        <button type="button" class="swatch-btn" data-color="#38a169" style="background:#38a169" title="Emerald"></button>
+        <button type="button" class="swatch-btn" data-color="#2f855a" style="background:#2f855a" title="Forest"></button>
+        <button type="button" class="swatch-btn" data-color="#319795" style="background:#319795" title="Teal"></button>
+        <button type="button" class="swatch-btn" data-color="#3182ce" style="background:#3182ce" title="Sky Blue"></button>
+        <button type="button" class="swatch-btn" data-color="#2b6cb0" style="background:#2b6cb0" title="Royal Blue"></button>
+        <button type="button" class="swatch-btn" data-color="#4c51bf" style="background:#4c51bf" title="Indigo"></button>
+        <button type="button" class="swatch-btn" data-color="#6b46c1" style="background:#6b46c1" title="Royal Purple"></button>
+        <button type="button" class="swatch-btn" data-color="#b83280" style="background:#b83280" title="Magenta"></button>
+        <button type="button" class="swatch-btn" data-color="#d53f8c" style="background:#d53f8c" title="Rose Pink"></button>
+        <button type="button" class="swatch-btn" data-color="#4a5568" style="background:#4a5568" title="Slate"></button>
       </div>
     </div>
 
@@ -722,17 +756,25 @@
         </select>
       </div>
       <div class="field">
-        <label for="new-color">Node Color</label>
-        <div class="color-picker-row">
-          <input id="new-color" type="color" value="#7c5c3a">
-          <div class="swatch-list" id="new-swatches">
-            <button type="button" class="swatch-btn" data-color="#7c5c3a" style="background:#7c5c3a" title="Bronze"></button>
-            <button type="button" class="swatch-btn" data-color="#2b6cb0" style="background:#2b6cb0" title="Blue"></button>
-            <button type="button" class="swatch-btn" data-color="#2f855a" style="background:#2f855a" title="Green"></button>
-            <button type="button" class="swatch-btn" data-color="#b83280" style="background:#b83280" title="Rose"></button>
-            <button type="button" class="swatch-btn" data-color="#6b46c1" style="background:#6b46c1" title="Purple"></button>
-            <button type="button" class="swatch-btn" data-color="#c05621" style="background:#c05621" title="Amber"></button>
-          </div>
+        <div class="color-picker-header">
+          <label for="new-color">Node Color</label>
+          <input id="new-color" type="color" value="#7c5c3a" title="Pick any custom color">
+        </div>
+        <div class="swatch-grid" id="new-swatches">
+          <button type="button" class="swatch-btn" data-color="#7c5c3a" style="background:#7c5c3a" title="Bronze"></button>
+          <button type="button" class="swatch-btn" data-color="#c53030" style="background:#c53030" title="Crimson"></button>
+          <button type="button" class="swatch-btn" data-color="#c05621" style="background:#c05621" title="Terracotta"></button>
+          <button type="button" class="swatch-btn" data-color="#d69e2e" style="background:#d69e2e" title="Gold"></button>
+          <button type="button" class="swatch-btn" data-color="#38a169" style="background:#38a169" title="Emerald"></button>
+          <button type="button" class="swatch-btn" data-color="#2f855a" style="background:#2f855a" title="Forest"></button>
+          <button type="button" class="swatch-btn" data-color="#319795" style="background:#319795" title="Teal"></button>
+          <button type="button" class="swatch-btn" data-color="#3182ce" style="background:#3182ce" title="Sky Blue"></button>
+          <button type="button" class="swatch-btn" data-color="#2b6cb0" style="background:#2b6cb0" title="Royal Blue"></button>
+          <button type="button" class="swatch-btn" data-color="#4c51bf" style="background:#4c51bf" title="Indigo"></button>
+          <button type="button" class="swatch-btn" data-color="#6b46c1" style="background:#6b46c1" title="Royal Purple"></button>
+          <button type="button" class="swatch-btn" data-color="#b83280" style="background:#b83280" title="Magenta"></button>
+          <button type="button" class="swatch-btn" data-color="#d53f8c" style="background:#d53f8c" title="Rose Pink"></button>
+          <button type="button" class="swatch-btn" data-color="#4a5568" style="background:#4a5568" title="Slate"></button>
         </div>
       </div>
     </div>
@@ -813,7 +855,7 @@
   let isPanning = false, panStart = null;
   let theme = 'system';
 
-  const NODE_W = 110, NODE_H = 110, NODE_GAP_X = 36, NODE_GAP_Y = 60;
+  const NODE_W = 110, NODE_H = 110, NODE_GAP_X = 36, NODE_GAP_Y = 64;
   const GEN_LABELS = ['Great-grandparents', 'Grandparents', 'Parents', 'Children', 'Grandchildren'];
   const GEN_H = NODE_H + NODE_GAP_Y;
 
@@ -1101,7 +1143,7 @@
   try { const t = localStorage.getItem('ftree_theme'); if (t) theme = t; } catch(e) {}
   applyTheme();
 
-  /* ── Layout (Orders siblings left-to-right by their Order number: 1, 2, 3...) ── */
+  /* ── Layout (Keeps spouses adjacent & orders siblings 1 -> last left-to-right) ── */
   function computeLayout() {
     const gens = {};
     people.forEach(p => {
@@ -1113,22 +1155,39 @@
     Object.keys(gens).sort((a, b) => Number(a) - Number(b)).forEach(g => {
       const members = gens[g];
       const prevGen = gens[parseInt(g) - 1] || [];
-      members.sort((a, b) => {
-        // 1. Group children under their parent's horizontal order first
+
+      const baseCompare = (a, b) => {
         const aParent = (a.parents || []).find(pid => prevGen.some(x => x.id === pid));
         const bParent = (b.parents || []).find(pid => prevGen.some(x => x.id === pid));
         const aIdx = aParent ? prevGen.findIndex(x => x.id === aParent) : 999;
         const bIdx = bParent ? prevGen.findIndex(x => x.id === bParent) : 999;
         if (aIdx !== bIdx) return aIdx - bIdx;
 
-        // 2. Sort siblings from 1st (far left) to last (right) using their explicit order number
         const aOrd = (a.order !== null && a.order !== undefined) ? Number(a.order) : 999999;
         const bOrd = (b.order !== null && b.order !== undefined) ? Number(b.order) : 999999;
         if (aOrd !== bOrd) return aOrd - bOrd;
 
-        // 3. Fallback to creation ID
         return a.id - b.id;
+      };
+
+      members.sort(baseCompare);
+
+      // Cluster partners immediately next to each other so the rectangular couple box wraps cleanly
+      const arranged = [];
+      const visited = new Set();
+      members.forEach(m => {
+        if (visited.has(m.id)) return;
+        visited.add(m.id);
+        arranged.push(m);
+        (m.partners || []).forEach(pid => {
+          const partner = members.find(x => x.id === pid);
+          if (partner && !visited.has(partner.id)) {
+            visited.add(partner.id);
+            arranged.push(partner);
+          }
+        });
       });
+      gens[g] = arranged;
     });
 
     const positions = {};
@@ -1146,7 +1205,7 @@
 
   /* ── Render ── */
   function render() {
-    Array.from(canvas.querySelectorAll('.person-node,.partner-heart,.gen-label')).forEach(el => el.remove());
+    Array.from(canvas.querySelectorAll('.person-node,.partner-heart,.gen-label,.couple-box')).forEach(el => el.remove());
     svg.innerHTML = '';
     emptyState.classList.toggle('hidden', people.length > 0);
     if (people.length === 0) return;
@@ -1203,20 +1262,37 @@
         drawnPartners.add(key);
         const par = pos[partnerId];
         if (!par) return;
+
+        // Draw dotted rectangular enclosure around wife & husband
+        const leftX = Math.min(pp.x, par.x) + ox - 10;
+        const rightX = Math.max(pp.x, par.x) + ox + NODE_W + 10;
+        const topY = Math.min(pp.y, par.y) + oy - 10;
+        const bottomY = Math.max(pp.y, par.y) + oy + NODE_H + 14;
+
+        const box = document.createElement('div');
+        box.className = 'couple-box';
+        box.style.left = leftX + 'px';
+        box.style.top = topY + 'px';
+        box.style.width = (rightX - leftX) + 'px';
+        box.style.height = (bottomY - topY) + 'px';
+        canvas.appendChild(box);
+
+        // Partner connector line + heart
         const parx = par.x + ox + NODE_W / 2;
-        const pary = par.y + oy + NODE_H / 2;
-        const py2 = py + NODE_H / 2;
+        const pary = par.y + oy + 36;
+        const py2 = py + 36;
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         line.setAttribute('x1', px); line.setAttribute('y1', py2);
         line.setAttribute('x2', parx); line.setAttribute('y2', pary);
         line.setAttribute('class', 'partner-line');
         svg.appendChild(line);
+
         const hx = (px + parx) / 2;
         const hy = (py2 + pary) / 2;
         const heart = document.createElement('div');
         heart.className = 'partner-heart';
         heart.textContent = '♥';
-        heart.style.left = (hx - 8) + 'px';
+        heart.style.left = (hx - 9) + 'px';
         heart.style.top = (hy - 10) + 'px';
         canvas.appendChild(heart);
       });

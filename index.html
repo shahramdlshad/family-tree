@@ -495,7 +495,6 @@
       h1 { font-size: 1rem; }
       #panel { width: 100vw; }
       .field-row { grid-template-columns: 1fr; }
-      .sync-badge { display: none; }
     }
 
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -766,6 +765,7 @@
   let isEditor = false;
   let isRemoteUpdate = false;
   let hasInitialFit = false;
+  let initialCloudLoaded = false;
 
   /* ── State ── */
   let people = [];
@@ -839,7 +839,7 @@
     try {
       await signInWithEmailAndPassword(auth, email, pass);
       loginBackdrop.hidden = true;
-      if (people.length > 0) save();
+      if (people.length > 0 && !initialCloudLoaded) save();
     } catch (err) {
       console.error('Firebase Auth Error:', err);
       const code = err && err.code ? err.code : 'unknown-error';
@@ -928,6 +928,7 @@
     return (list || []).filter(Boolean).map(p => ({
       ...p,
       color: p.color || null,
+      photo: p.photo || null,
       parents: Array.isArray(p.parents) ? p.parents : [],
       children: Array.isArray(p.children) ? p.children : [],
       partners: Array.isArray(p.partners) ? p.partners : []
@@ -947,9 +948,10 @@
         syncBadge.className = 'sync-badge live';
       })
       .catch(err => {
-        console.error(err);
-        syncBadge.textContent = 'Permission Denied';
+        console.error('Firebase Save Error:', err);
+        syncBadge.textContent = 'Save Failed!';
         syncBadge.className = 'sync-badge err';
+        alert('Cloud save failed (' + (err.code || err.message) + '). Check your Firebase Realtime Database Rules.');
       });
   }
 
@@ -967,6 +969,7 @@
   /* ── Real-Time Listener from Cloud ── */
   onValue(treeRef, (snapshot) => {
     const data = snapshot.val();
+    initialCloudLoaded = true;
     syncBadge.textContent = 'Synced ✓';
     syncBadge.className = 'sync-badge live';
 
@@ -1423,7 +1426,7 @@
     save(); render();
   });
 
-  /* ── Photo Upload ── */
+  /* ── Photo Upload (160x160 compact JPEG for fast Realtime Database sync) ── */
   document.getElementById('panel-photo-btn').addEventListener('click', () => {
     if (!isEditor) return;
     document.getElementById('photo-input').click();
@@ -1435,7 +1438,7 @@
     reader.onload = ev => {
       const imgObj = new Image();
       imgObj.onload = () => {
-        const size = 200;
+        const size = 160;
         const c = document.createElement('canvas');
         c.width = size; c.height = size;
         const ctx = c.getContext('2d');
@@ -1443,7 +1446,7 @@
         const sx = (imgObj.width - minSide) / 2;
         const sy = (imgObj.height - minSide) / 2;
         ctx.drawImage(imgObj, sx, sy, minSide, minSide, 0, 0, size, size);
-        const compressedDataUrl = c.toDataURL('image/jpeg', 0.8);
+        const compressedDataUrl = c.toDataURL('image/jpeg', 0.75);
 
         const p = people.find(x => x.id === selectedId);
         if (!p) return;

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -101,6 +101,19 @@
       white-space: nowrap;
     }
 
+    .sync-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.55rem;
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+      color: var(--fg2);
+      border: 1px solid var(--node-border);
+      white-space: nowrap;
+    }
+    .sync-badge.live { color: #2e7d32; border-color: color-mix(in srgb, #2e7d32 40%, transparent); }
+    .sync-badge.err { color: #c0392b; border-color: color-mix(in srgb, #c0392b 40%, transparent); }
+
     .header-actions { display: flex; gap: 0.5rem; align-items: center; }
 
     button {
@@ -185,7 +198,6 @@
       transition: border-color 0.2s, box-shadow 0.2s;
       flex-shrink: 0;
       position: relative;
-      box-shadow: var(--shadow);
     }
 
     .person-node:hover .node-photo,
@@ -397,26 +409,6 @@
       display: flex; gap: 0.5rem; justify-content: flex-end;
     }
 
-    /* Custom Confirm Dialog */
-    #confirm-backdrop {
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.45);
-      z-index: 250;
-      display: flex; align-items: center; justify-content: center;
-      padding: 1rem;
-    }
-    #confirm-backdrop[hidden] { display: none; }
-    #confirm-box {
-      background: var(--panel-bg);
-      border-radius: 12px;
-      width: min(340px, 100%);
-      padding: 1.25rem;
-      box-shadow: var(--shadow-hover);
-      display: flex; flex-direction: column; gap: 1rem;
-    }
-    #confirm-box p { font-size: 0.9rem; color: var(--fg); line-height: 1.4; }
-    .confirm-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
-
     #connector-svg {
       position: absolute;
       top: 0; left: 0;
@@ -454,6 +446,7 @@
   <header>
     <div class="header-left">
       <h1>Family Tree</h1>
+      <span id="sync-status" class="sync-badge">Connecting...</span>
     </div>
     <div class="header-actions">
       <button class="btn-ghost btn-icon" id="btn-theme" title="Toggle theme">&#9788;&#65038;</button>
@@ -466,7 +459,7 @@
     <div id="tree-canvas">
       <svg id="connector-svg"></svg>
     </div>
-    <div id="empty-state" class="hidden">
+    <div id="empty-state">
       <div class="empty-icon">&#127795;</div>
       <div class="empty-title">Your family tree awaits</div>
       <div class="empty-sub">Click <strong>+ Add person</strong> to place your first family member.</div>
@@ -493,7 +486,7 @@
         <div class="photo-overlay">Change<br>photo</div>
       </div>
       <input type="file" id="photo-input" accept="image/*">
-      <span style="font-size:0.75rem;color:var(--fg3)">Click to upload photo</span>
+      <span style="font-size:0.75rem;color:var(--fg3)">Click to upload photo (auto-compressed for cloud)</span>
     </div>
 
     <div class="field-row">
@@ -612,19 +605,37 @@
   </div>
 </div>
 
-<!-- Custom Confirm Modal -->
-<div id="confirm-backdrop" hidden>
-  <div id="confirm-box">
-    <p>Remove this person from the tree?</p>
-    <div class="confirm-actions">
-      <button class="btn-ghost" id="btn-confirm-cancel">Cancel</button>
-      <button class="btn-danger" id="btn-confirm-ok">Remove</button>
-    </div>
-  </div>
-</div>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+  import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 
-<script>
-(function() {
+  const firebaseConfig = {
+    apiKey: "AIzaSyC0sEtTAINTvJOvC2_RUEt2wB_S3CgLSZw",
+    authDomain: "family-tree-5458e.firebaseapp.com",
+    databaseURL: "https://family-tree-5458e-default-rtdb.firebaseio.com",
+    projectId: "family-tree-5458e",
+    storageBucket: "family-tree-5458e.firebasestorage.app",
+    messagingSenderId: "129798754852",
+    appId: "1:129798754852:web:db98b115252984bd97feb1",
+    measurementId: "G-473BME077C"
+  };
+
+  const syncBadge = document.getElementById('sync-status');
+  let db = null;
+  let treeRef = null;
+  let isRemoteUpdate = false;
+  let hasInitialFit = false;
+
+  try {
+    const app = initializeApp(firebaseConfig);
+    db = getDatabase(app);
+    treeRef = ref(db, 'familyTreeData');
+  } catch (err) {
+    console.error(err);
+    syncBadge.textContent = 'Cloud Error';
+    syncBadge.className = 'sync-badge err';
+  }
+
   /* ── State ── */
   let people = [];
   let nextId = 1;
@@ -637,117 +648,79 @@
   const GEN_LABELS = ['Great-grandparents', 'Grandparents', 'Parents', 'Children', 'Grandchildren'];
   const GEN_H = NODE_H + NODE_GAP_Y;
 
-  /* ── Sample Initial Data ── */
-  function seedSampleData() {
-    people = [
-      {
-        id: 1,
-        first: 'Arthur',
-        last: 'Miller',
-        birth: '1975',
-        death: '',
-        notes: 'Architect and woodworker.',
-        photo: null,
-        gen: 2,
-        parents: [],
-        children: [3, 4, 5],
-        partners: [2]
-      },
-      {
-        id: 2,
-        first: 'Clara',
-        last: 'Miller',
-        birth: '1977',
-        death: '',
-        notes: 'Botanist and avid gardener.',
-        photo: null,
-        gen: 2,
-        parents: [],
-        children: [3, 4, 5],
-        partners: [1]
-      },
-      {
-        id: 3,
-        first: 'Liam',
-        last: 'Miller',
-        birth: '2003',
-        death: '',
-        notes: 'Studying software engineering.',
-        photo: null,
-        gen: 3,
-        parents: [1, 2],
-        children: [],
-        partners: []
-      },
-      {
-        id: 4,
-        first: 'Maya',
-        last: 'Miller',
-        birth: '2006',
-        death: '',
-        notes: 'Loves painting and track.',
-        photo: null,
-        gen: 3,
-        parents: [1, 2],
-        children: [],
-        partners: []
-      },
-      {
-        id: 5,
-        first: 'Noah',
-        last: 'Miller',
-        birth: '2010',
-        death: '',
-        notes: 'Plays cello in the youth orchestra.',
-        photo: null,
-        gen: 3,
-        parents: [1, 2],
-        children: [],
-        partners: []
-      }
-    ];
-    nextId = 6;
-    syncGenerations();
+  /* ── Normalize Arrays (Firebase omits empty arrays) ── */
+  function normalizePeople(list) {
+    return (list || []).filter(Boolean).map(p => ({
+      ...p,
+      parents: Array.isArray(p.parents) ? p.parents : [],
+      children: Array.isArray(p.children) ? p.children : [],
+      partners: Array.isArray(p.partners) ? p.partners : []
+    }));
   }
 
-  /* ── Persist ── */
+  /* ── Persist (Local Cache + Real-Time Cloud Sync) ── */
   function save() {
     try { localStorage.setItem('ftree_v2', JSON.stringify({ people, nextId })); } catch(e) {}
+    if (treeRef && !isRemoteUpdate) {
+      syncBadge.textContent = 'Saving...';
+      syncBadge.className = 'sync-badge';
+      set(treeRef, { people, nextId })
+        .then(() => {
+          syncBadge.textContent = 'Synced ✓';
+          syncBadge.className = 'sync-badge live';
+        })
+        .catch(err => {
+          console.error(err);
+          syncBadge.textContent = 'Sync Failed';
+          syncBadge.className = 'sync-badge err';
+        });
+    }
   }
 
-  function load() {
+  function loadLocal() {
     try {
-      const raw = localStorage.getItem('ftree_v2') || localStorage.getItem('ftree_v1');
-      if (raw) {
-        const d = JSON.parse(raw);
-        if (d && Array.isArray(d.people) && d.people.length > 0) {
-          people = d.people;
-          nextId = d.nextId || (Math.max(...people.map(p => p.id)) + 1);
-          people.forEach(p => {
-            if (!p.children) p.children = [];
-            if (!p.parents) p.parents = [];
-            if (!p.partners) p.partners = [];
-          });
-          people.forEach(child => {
-            (child.parents || []).forEach(parentId => {
-              const parent = people.find(x => x.id === parentId);
-              if (parent && !parent.children.includes(child.id)) {
-                parent.children.push(child.id);
-              }
-            });
-          });
-          syncGenerations();
-          return;
-        }
+      const d = JSON.parse(localStorage.getItem('ftree_v2') || 'null');
+      if (d) {
+        people = normalizePeople(d.people);
+        nextId = d.nextId || 1;
+        syncGenerations();
       }
     } catch(e) {}
-    // Seed sample family data if no saved tree exists yet
-    seedSampleData();
-    save();
+  }
+
+  /* ── Real-Time Listener from Cloud ── */
+  if (treeRef) {
+    onValue(treeRef, (snapshot) => {
+      const data = snapshot.val();
+      syncBadge.textContent = 'Synced ✓';
+      syncBadge.className = 'sync-badge live';
+
+      if (data && data.people) {
+        isRemoteUpdate = true;
+        people = normalizePeople(data.people);
+        nextId = data.nextId || (Math.max(0, ...people.map(p => p.id)) + 1);
+        syncGenerations();
+        try { localStorage.setItem('ftree_v2', JSON.stringify({ people, nextId })); } catch(e) {}
+        render();
+        if (selectedId && people.some(x => x.id === selectedId)) {
+          refreshPanelData(selectedId);
+        }
+        if (!hasInitialFit && people.length > 0) {
+          fitToScreen();
+          hasInitialFit = true;
+        }
+        isRemoteUpdate = false;
+      } else if (people.length > 0) {
+        save();
+      }
+    }, (error) => {
+      console.error(error);
+      syncBadge.textContent = 'Offline / Rules Error';
+      syncBadge.className = 'sync-badge err';
+    });
   }
 
   /* ── Generation Synchronization ── */
-  // Ensures all children sit on the exact same row (parent.gen + 1) and partners align
   function syncGenerations() {
     let changed = true;
     let safety = 0;
@@ -755,7 +728,6 @@
       changed = false;
       safety++;
       people.forEach(person => {
-        // Align child's generation to 1 row below their highest-generation parent
         if (person.parents && person.parents.length > 0) {
           const parentGens = person.parents
             .map(pid => people.find(x => x.id === pid))
@@ -769,7 +741,6 @@
             }
           }
         }
-        // Align partners to the same row
         if (person.partners && person.partners.length > 0) {
           person.partners.forEach(partId => {
             const partner = people.find(x => x.id === partId);
@@ -792,7 +763,6 @@
   const panel = document.getElementById('panel');
   const emptyState = document.getElementById('empty-state');
   const modal = document.getElementById('modal-backdrop');
-  const confirmModal = document.getElementById('confirm-backdrop');
 
   /* ── Theme ── */
   const btnTheme = document.getElementById('btn-theme');
@@ -819,7 +789,6 @@
       gens[g].push(p);
     });
 
-    // Sort generations top-down so sibling groups stay together on the same row
     Object.keys(gens).sort((a, b) => Number(a) - Number(b)).forEach(g => {
       const members = gens[g];
       const prevGen = gens[parseInt(g) - 1] || [];
@@ -871,7 +840,6 @@
     const ox = -minX + 80;
     const oy = -minY + 40;
 
-    // Generation labels
     [...new Set(people.map(p => p.gen))].sort((a, b) => a - b).forEach(g => {
       const lbl = document.createElement('div');
       lbl.className = 'gen-label';
@@ -880,7 +848,6 @@
       canvas.appendChild(lbl);
     });
 
-    // Connectors
     const drawnPartners = new Set();
     people.forEach(p => {
       const pp = pos[p.id];
@@ -925,7 +892,6 @@
       });
     });
 
-    // Nodes
     people.forEach(p => {
       const pp = pos[p.id];
       if (!pp) return;
@@ -971,12 +937,9 @@
   function initials(p) { return [(p.first || '')[0], (p.last || '')[0]].filter(Boolean).join('').toUpperCase() || '?'; }
 
   /* ── Panel ── */
-  function selectPerson(id) {
-    selectedId = id;
+  function refreshPanelData(id) {
     const p = people.find(x => x.id === id);
     if (!p) return;
-
-    panel.classList.add('open');
     document.getElementById('panel-title').textContent = fullName(p);
     document.getElementById('edit-first').value = p.first || '';
     document.getElementById('edit-last').value = p.last || '';
@@ -994,6 +957,12 @@
     renderRelTags('parents', p.parents || [], id);
     renderRelTags('children', p.children || [], id);
     renderRelTags('partners', p.partners || [], id);
+  }
+
+  function selectPerson(id) {
+    selectedId = id;
+    panel.classList.add('open');
+    refreshPanelData(id);
     render();
   }
 
@@ -1020,7 +989,6 @@
     });
   }
 
-  /* Add parent: sets parent on child, child on parent, and snaps child to parent.gen + 1 */
   document.getElementById('btn-add-parent').addEventListener('click', () => {
     const sel = document.getElementById('parent-select').value;
     if (!sel || !selectedId) return;
@@ -1035,7 +1003,6 @@
     save(); render(); renderRelTags('parents', child.parents, selectedId);
   });
 
-  /* Add child: sets child on parent, parent on child, and snaps child to parent.gen + 1 */
   document.getElementById('btn-add-child').addEventListener('click', () => {
     const sel = document.getElementById('child-select').value;
     if (!sel || !selectedId) return;
@@ -1049,7 +1016,6 @@
     save(); render(); renderRelTags('children', parent.children, selectedId);
   });
 
-  /* Add partner: bidirectional and aligns partner rows */
   document.getElementById('btn-add-partner').addEventListener('click', () => {
     const sel = document.getElementById('partner-select').value;
     if (!sel || !selectedId) return;
@@ -1100,23 +1066,10 @@
     document.getElementById('panel-photo-initials').textContent = initials(p);
   });
 
-  /* ── Delete (Custom Confirm Modal instead of window.confirm) ── */
+  /* ── Delete ── */
   document.getElementById('btn-delete').addEventListener('click', () => {
     if (!selectedId) return;
-    confirmModal.hidden = false;
-  });
-
-  document.getElementById('btn-confirm-cancel').addEventListener('click', () => {
-    confirmModal.hidden = true;
-  });
-
-  confirmModal.addEventListener('click', e => {
-    if (e.target === confirmModal) confirmModal.hidden = true;
-  });
-
-  document.getElementById('btn-confirm-ok').addEventListener('click', () => {
-    confirmModal.hidden = true;
-    if (!selectedId) return;
+    if (!confirm('Remove this person from the tree?')) return;
     const id = selectedId;
     people = people.filter(x => x.id !== id);
     people.forEach(p => {
@@ -1129,7 +1082,7 @@
     save(); render();
   });
 
-  /* ── Photo ── */
+  /* ── Photo Upload with Auto-Resize (keeps cloud database fast & small) ── */
   document.getElementById('panel-photo-btn').addEventListener('click', () => {
     document.getElementById('photo-input').click();
   });
@@ -1138,13 +1091,27 @@
     if (!file || !selectedId) return;
     const reader = new FileReader();
     reader.onload = ev => {
-      const p = people.find(x => x.id === selectedId);
-      if (!p) return;
-      p.photo = ev.target.result;
-      const img = document.getElementById('panel-photo-img');
-      img.src = p.photo; img.style.display = 'block';
-      document.getElementById('panel-photo-initials').style.display = 'none';
-      save(); render();
+      const imgObj = new Image();
+      imgObj.onload = () => {
+        const size = 200;
+        const c = document.createElement('canvas');
+        c.width = size; c.height = size;
+        const ctx = c.getContext('2d');
+        const minSide = Math.min(imgObj.width, imgObj.height);
+        const sx = (imgObj.width - minSide) / 2;
+        const sy = (imgObj.height - minSide) / 2;
+        ctx.drawImage(imgObj, sx, sy, minSide, minSide, 0, 0, size, size);
+        const compressedDataUrl = c.toDataURL('image/jpeg', 0.8);
+
+        const p = people.find(x => x.id === selectedId);
+        if (!p) return;
+        p.photo = compressedDataUrl;
+        const img = document.getElementById('panel-photo-img');
+        img.src = p.photo; img.style.display = 'block';
+        document.getElementById('panel-photo-initials').style.display = 'none';
+        save(); render();
+      };
+      imgObj.src = ev.target.result;
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -1248,7 +1215,6 @@
   }
 
   document.getElementById('btn-fit').addEventListener('click', fitToScreen);
-  window.addEventListener('resize', () => { if (people.length > 0) fitToScreen(); });
 
   wrap.addEventListener('click', e => {
     if (e.target === wrap || e.target === canvas || e.target === svg) {
@@ -1259,11 +1225,12 @@
   });
 
   /* ── Init ── */
-  load();
+  loadLocal();
   render();
-  if (people.length > 0) fitToScreen();
-
-})();
+  if (people.length > 0) {
+    fitToScreen();
+    hasInitialFit = true;
+  }
 </script>
 
 </body>

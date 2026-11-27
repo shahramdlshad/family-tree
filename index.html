@@ -129,16 +129,25 @@
       white-space: nowrap;
     }
     button:active { transform: scale(0.97); }
+    button:disabled { opacity: 0.65; cursor: default; }
 
     .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover { background: var(--accent2); color: var(--fg); }
+    .btn-primary:hover:not(:disabled) { background: var(--accent2); color: var(--fg); }
+
+    .btn-cloud {
+      background: #2e7d32;
+      color: #fff;
+    }
+    .btn-cloud:hover:not(:disabled) {
+      background: #256428;
+    }
 
     .btn-ghost {
       background: transparent;
       color: var(--fg2);
       border: 1px solid var(--node-border);
     }
-    .btn-ghost:hover { background: var(--node-bg); color: var(--fg); }
+    .btn-ghost:hover:not(:disabled) { background: var(--node-bg); color: var(--fg); }
 
     .btn-icon {
       padding: 0.4rem 0.5rem;
@@ -148,7 +157,7 @@
       color: var(--fg2);
       border: 1px solid var(--node-border);
     }
-    .btn-icon:hover { background: var(--node-bg); color: var(--fg); }
+    .btn-icon:hover:not(:disabled) { background: var(--node-bg); color: var(--fg); }
 
     #canvas-wrap {
       flex: 1;
@@ -560,6 +569,7 @@
       <span id="sync-status" class="sync-badge">Connecting...</span>
     </div>
     <div class="header-actions">
+      <button class="btn-cloud" id="btn-save-cloud" title="Save all changes to Firebase cloud" hidden>&#9729; Save All</button>
       <button class="btn-ghost" id="btn-export" title="Download safety backup (.json)">&#8595; Export</button>
       <button class="btn-ghost" id="btn-import" title="Restore from backup file (.json)" hidden>&#8593; Import</button>
       <input type="file" id="import-input" accept=".json,application/json" style="display:none">
@@ -836,6 +846,7 @@
   const syncBadge = document.getElementById('sync-status');
   const btnAuth = document.getElementById('btn-auth');
   const btnAdd = document.getElementById('btn-add');
+  const btnSaveCloud = document.getElementById('btn-save-cloud');
   const btnImport = document.getElementById('btn-import');
   const btnExport = document.getElementById('btn-export');
   const importInput = document.getElementById('import-input');
@@ -868,6 +879,7 @@
 
   function updateEditorUI() {
     btnAdd.hidden = !isEditor;
+    btnSaveCloud.hidden = !isEditor;
     btnImport.hidden = !isEditor;
     btnAuth.textContent = isEditor ? 'Sign Out' : '🔒 Editor Login';
     document.getElementById('readonly-banner').hidden = isEditor;
@@ -1021,25 +1033,65 @@
     }));
   }
 
-  /* ── Persist ── */
-  function save() {
+  /* ── Persist (Local + Cloud) ── */
+  function save(isManualButton = false) {
     try { localStorage.setItem('ftree_v2', JSON.stringify({ people, nextId })); } catch(e) {}
-    if (!isEditor || isRemoteUpdate) return;
+    if (!isEditor || (isRemoteUpdate && !isManualButton)) return;
 
     syncBadge.textContent = 'Saving...';
     syncBadge.className = 'sync-badge';
-    set(treeRef, { people, nextId })
+    if (isManualButton) {
+      btnSaveCloud.disabled = true;
+      btnSaveCloud.textContent = '☁ Saving...';
+    }
+
+    return set(treeRef, { people, nextId })
       .then(() => {
         syncBadge.textContent = 'Synced ✓';
         syncBadge.className = 'sync-badge live';
+        if (isManualButton) {
+          btnSaveCloud.textContent = '☁ Saved ✓';
+          setTimeout(() => {
+            btnSaveCloud.disabled = false;
+            btnSaveCloud.textContent = '☁ Save All';
+          }, 1600);
+        }
       })
       .catch(err => {
         console.error('Firebase Save Error:', err);
         syncBadge.textContent = 'Save Failed!';
         syncBadge.className = 'sync-badge err';
+        if (isManualButton) {
+          btnSaveCloud.disabled = false;
+          btnSaveCloud.textContent = '☁ Save All';
+        }
         alert('Cloud save failed (' + (err.code || err.message) + '). Check your Firebase Realtime Database Rules.');
       });
   }
+
+  /* ── Header "Save All" Button (Also flushes open side panel edits first) ── */
+  btnSaveCloud.addEventListener('click', () => {
+    if (!isEditor) return;
+    if (selectedId && panel.classList.contains('open')) {
+      const p = people.find(x => x.id === selectedId);
+      if (p) {
+        p.first = document.getElementById('edit-first').value.trim();
+        p.last = document.getElementById('edit-last').value.trim();
+        p.birth = document.getElementById('edit-birth').value.trim();
+        p.death = document.getElementById('edit-death').value.trim();
+        p.gen = parseInt(document.getElementById('edit-gen').value);
+        const ordVal = document.getElementById('edit-order').value.trim();
+        p.order = ordVal !== '' ? parseInt(ordVal, 10) : null;
+        p.notes = document.getElementById('edit-notes').value.trim();
+        syncGenerations();
+        document.getElementById('edit-gen').value = String(p.gen);
+        document.getElementById('panel-title').textContent = fullName(p);
+        document.getElementById('panel-photo-initials').textContent = initials(p);
+        render();
+      }
+    }
+    save(true);
+  });
 
   function loadLocal() {
     try {
@@ -1172,7 +1224,6 @@
 
       members.sort(baseCompare);
 
-      // Cluster partners immediately next to each other so the rectangular couple box wraps cleanly
       const arranged = [];
       const visited = new Set();
       members.forEach(m => {
@@ -1263,7 +1314,7 @@
         const par = pos[partnerId];
         if (!par) return;
 
-        // Draw dotted rectangular enclosure around wife & husband
+        // Dotted rectangular enclosure around wife & husband
         const leftX = Math.min(pp.x, par.x) + ox - 10;
         const rightX = Math.max(pp.x, par.x) + ox + NODE_W + 10;
         const topY = Math.min(pp.y, par.y) + oy - 10;

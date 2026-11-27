@@ -466,6 +466,7 @@
       background: rgba(192, 57, 43, 0.1);
       padding: 0.5rem 0.65rem;
       border-radius: 6px;
+      word-break: break-word;
     }
 
     #connector-svg {
@@ -840,7 +841,10 @@
       loginBackdrop.hidden = true;
       if (people.length > 0) save();
     } catch (err) {
-      loginError.textContent = 'Invalid email or password.';
+      console.error('Firebase Auth Error:', err);
+      const code = err && err.code ? err.code : 'unknown-error';
+      const msg = err && err.message ? err.message : '';
+      loginError.textContent = 'Error (' + code + '): ' + msg;
       loginError.hidden = false;
     } finally {
       submitBtn.disabled = false;
@@ -859,7 +863,6 @@
     const filename = 'family-tree-backup-' + new Date().toISOString().slice(0, 10) + '.json';
     const blob = new Blob([payload], { type: 'application/json' });
 
-    // Mobile Web Share API support if available for files, with standard download fallback
     try {
       const file = new File([blob], filename, { type: 'application/json' });
       if (navigator.canShare && navigator.canShare({ files: [file] }) && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {

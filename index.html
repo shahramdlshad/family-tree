@@ -186,7 +186,7 @@
       padding-left: max(16px, env(safe-area-inset-left, 0px));
     }
 
-    /* Dotted rectangular enclosure around wife & husband */
+    /* Unified dotted rectangular enclosure around partners */
     .couple-box {
       position: absolute;
       border: 2px dotted var(--accent2);
@@ -287,7 +287,7 @@
       pointer-events: none;
       z-index: 3;
       background: var(--bg);
-      padding: 0 2px;
+      padding: 0 3px;
       border-radius: 50%;
     }
 
@@ -1069,7 +1069,7 @@
       });
   }
 
-  /* ── Header "Save All" Button (Also flushes open side panel edits first) ── */
+  /* ── Header "Save All" Button ── */
   btnSaveCloud.addEventListener('click', () => {
     if (!isEditor) return;
     if (selectedId && panel.classList.contains('open')) {
@@ -1195,7 +1195,7 @@
   try { const t = localStorage.getItem('ftree_theme'); if (t) theme = t; } catch(e) {}
   applyTheme();
 
-  /* ── Layout (Keeps spouses adjacent & orders siblings 1 -> last left-to-right) ── */
+  /* ── Layout (Groups connected spouses together & orders siblings 1 -> last) ── */
   function computeLayout() {
     const gens = {};
     people.forEach(p => {
@@ -1203,6 +1203,8 @@
       if (!gens[g]) gens[g] = [];
       gens[g].push(p);
     });
+
+    const partnerClusters = [];
 
     Object.keys(gens).sort((a, b) => Number(a) - Number(b)).forEach(g => {
       const members = gens[g];
@@ -1224,20 +1226,36 @@
 
       members.sort(baseCompare);
 
+      // Build connected partner groups (BFS so multi-spouse families stay in one contiguous cluster)
       const arranged = [];
       const visited = new Set();
+
       members.forEach(m => {
         if (visited.has(m.id)) return;
+        const cluster = [];
+        const queue = [m];
         visited.add(m.id);
-        arranged.push(m);
-        (m.partners || []).forEach(pid => {
-          const partner = members.find(x => x.id === pid);
-          if (partner && !visited.has(partner.id)) {
-            visited.add(partner.id);
-            arranged.push(partner);
-          }
-        });
+
+        while (queue.length > 0) {
+          const curr = queue.shift();
+          cluster.push(curr);
+          (curr.partners || []).forEach(pid => {
+            const partner = members.find(x => x.id === pid);
+            if (partner && !visited.has(partner.id)) {
+              visited.add(partner.id);
+              queue.push(partner);
+            }
+          });
+        }
+
+        // Keep the primary member (with parents or order) on the left of their partner(s)
+        cluster.sort(baseCompare);
+        arranged.push(...cluster);
+        if (cluster.length > 1) {
+          partnerClusters.push(cluster.map(x => x.id));
+        }
       });
+
       gens[g] = arranged;
     });
 
@@ -1251,7 +1269,8 @@
         positions[p.id] = { x: startX + i * (NODE_W + NODE_GAP_X), y: g * GEN_H + 48 };
       });
     });
-    return positions;
+
+    return { positions, partnerClusters };
   }
 
   /* ── Render ── */
@@ -1261,7 +1280,7 @@
     emptyState.classList.toggle('hidden', people.length > 0);
     if (people.length === 0) return;
 
-    const pos = computeLayout();
+    const { positions: pos, partnerClusters } = computeLayout();
     const xs = Object.values(pos).map(p => p.x);
     const ys = Object.values(pos).map(p => p.y);
     const minX = Math.min(...xs) - NODE_W;
@@ -1287,7 +1306,52 @@
       canvas.appendChild(lbl);
     });
 
-    const drawnPartners = new Set();
+    // Draw ONE unified dotted rectangular enclosure per partner cluster & connect adjacent spouses
+    partnerClusters.forEach(clusterIds => {
+      const clusterCoords = clusterIds.map(id => ({ id, pos: pos[id] })).filter(x => x.pos);
+      if (clusterCoords.length < 2) return;
+
+      clusterCoords.sort((a, b) => a.pos.x - b.pos.x);
+
+      const leftX = clusterCoords[0].pos.x + ox - 10;
+      const rightX = clusterCoords[clusterCoords.length - 1].pos.x + ox + NODE_W + 10;
+      const topY = Math.min(...clusterCoords.map(c => c.pos.y)) + oy - 10;
+      const bottomY = Math.max(...clusterCoords.map(c => c.pos.y)) + oy + NODE_H + 14;
+
+      const box = document.createElement('div');
+      box.className = 'couple-box';
+      box.style.left = leftX + 'px';
+      box.style.top = topY + 'px';
+      box.style.width = (rightX - leftX) + 'px';
+      box.style.height = (bottomY - topY) + 'px';
+      canvas.appendChild(box);
+
+      // Draw dashed line + heart strictly between adjacent members so nothing overlaps circles
+      for (let i = 0; i < clusterCoords.length - 1; i++) {
+        const leftMember = clusterCoords[i];
+        const rightMember = clusterCoords[i + 1];
+
+        const x1 = leftMember.pos.x + ox + NODE_W - 16;
+        const x2 = rightMember.pos.x + ox + 16;
+        const y = leftMember.pos.y + oy + 36;
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', x1); line.setAttribute('y1', y);
+        line.setAttribute('x2', x2); line.setAttribute('y2', y);
+        line.setAttribute('class', 'partner-line');
+        svg.appendChild(line);
+
+        const hx = (x1 + x2) / 2;
+        const heart = document.createElement('div');
+        heart.className = 'partner-heart';
+        heart.textContent = '♥';
+        heart.style.left = (hx - 9) + 'px';
+        heart.style.top = (y - 10) + 'px';
+        canvas.appendChild(heart);
+      }
+    });
+
+    // Parent -> Child branch lines
     people.forEach(p => {
       const pp = pos[p.id];
       if (!pp) return;
@@ -1306,49 +1370,9 @@
         if (p.color) path.style.stroke = p.color;
         svg.appendChild(path);
       });
-
-      (p.partners || []).forEach(partnerId => {
-        const key = [p.id, partnerId].sort().join('-');
-        if (drawnPartners.has(key)) return;
-        drawnPartners.add(key);
-        const par = pos[partnerId];
-        if (!par) return;
-
-        // Dotted rectangular enclosure around wife & husband
-        const leftX = Math.min(pp.x, par.x) + ox - 10;
-        const rightX = Math.max(pp.x, par.x) + ox + NODE_W + 10;
-        const topY = Math.min(pp.y, par.y) + oy - 10;
-        const bottomY = Math.max(pp.y, par.y) + oy + NODE_H + 14;
-
-        const box = document.createElement('div');
-        box.className = 'couple-box';
-        box.style.left = leftX + 'px';
-        box.style.top = topY + 'px';
-        box.style.width = (rightX - leftX) + 'px';
-        box.style.height = (bottomY - topY) + 'px';
-        canvas.appendChild(box);
-
-        // Partner connector line + heart
-        const parx = par.x + ox + NODE_W / 2;
-        const pary = par.y + oy + 36;
-        const py2 = py + 36;
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', px); line.setAttribute('y1', py2);
-        line.setAttribute('x2', parx); line.setAttribute('y2', pary);
-        line.setAttribute('class', 'partner-line');
-        svg.appendChild(line);
-
-        const hx = (px + parx) / 2;
-        const hy = (py2 + pary) / 2;
-        const heart = document.createElement('div');
-        heart.className = 'partner-heart';
-        heart.textContent = '♥';
-        heart.style.left = (hx - 9) + 'px';
-        heart.style.top = (hy - 10) + 'px';
-        canvas.appendChild(heart);
-      });
     });
 
+    // Person nodes
     people.forEach(p => {
       const pp = pos[p.id];
       if (!pp) return;

@@ -186,12 +186,22 @@
       padding-left: max(16px, env(safe-area-inset-left, 0px));
     }
 
-    /* Unified dotted rectangular enclosure around partners */
+    /* Outer dotted rectangular boundary around brothers & sisters */
+    .sibling-box {
+      position: absolute;
+      border: 2px dotted var(--line);
+      border-radius: 20px;
+      background: color-mix(in srgb, var(--line) 8%, transparent);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Inner dotted rectangular enclosure around wife & husband */
     .couple-box {
       position: absolute;
       border: 2px dotted var(--accent2);
-      border-radius: 16px;
-      background: color-mix(in srgb, var(--accent2) 5%, transparent);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--accent2) 7%, transparent);
       pointer-events: none;
       z-index: 1;
     }
@@ -450,6 +460,12 @@
     .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 
     .rel-section { display: flex; flex-direction: column; gap: 0.5rem; }
+    .rel-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
     .rel-section h3 { font-size: 0.8125rem; font-weight: 600; color: var(--fg2); letter-spacing: 0.03em; }
 
     .rel-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; min-height: 1.5rem; }
@@ -518,6 +534,15 @@
       padding: 1rem 1.25rem;
       border-top: 1px solid var(--node-border);
       display: flex; gap: 0.5rem; justify-content: flex-end;
+    }
+
+    .parent-link-hint {
+      font-size: 0.78rem;
+      padding: 0.45rem 0.65rem;
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+      border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+      color: var(--fg2);
     }
 
     .login-error {
@@ -701,13 +726,16 @@
       </div>
     </div>
 
-    <!-- Children -->
+    <!-- Children (with instant "+ New Child" shortcut button) -->
     <div class="rel-section">
-      <h3>Children</h3>
+      <div class="rel-section-header">
+        <h3>Children</h3>
+        <button type="button" class="btn-primary editor-only" id="btn-quick-new-child" style="padding:0.25rem 0.6rem;font-size:0.75rem;">+ New Child</button>
+      </div>
       <div class="rel-tags" id="children-tags"></div>
       <div class="rel-add-row editor-only">
-        <select id="child-select"><option value="">&#8212; select person &#8212;</option></select>
-        <button class="btn-ghost" id="btn-add-child">Add</button>
+        <select id="child-select"><option value="">&#8212; link existing person &#8212;</option></select>
+        <button class="btn-ghost" id="btn-add-child">Link</button>
       </div>
     </div>
 
@@ -727,14 +755,15 @@
   </div>
 </div>
 
-<!-- Add person modal -->
+<!-- Add person / Quick add child modal -->
 <div id="modal-backdrop" class="modal-backdrop" hidden>
   <div class="modal-box">
     <div class="modal-header">
-      <h2>New family member</h2>
+      <h2 id="modal-title">New family member</h2>
       <button class="btn-icon" id="btn-modal-close">&#10005;</button>
     </div>
     <div class="modal-body">
+      <div class="parent-link-hint" id="modal-parent-hint" hidden></div>
       <div class="field-row">
         <div class="field">
           <label for="new-first">First name *</label>
@@ -857,6 +886,7 @@
   let isRemoteUpdate = false;
   let hasInitialFit = false;
   let initialCloudLoaded = false;
+  let pendingParentIds = [];
 
   /* ── State ── */
   let people = [];
@@ -866,7 +896,7 @@
   let isPanning = false, panStart = null;
   let theme = 'system';
 
-  const NODE_W = 110, NODE_H = 110, NODE_GAP_X = 36, NODE_GAP_Y = 64;
+  const NODE_W = 110, NODE_H = 110, NODE_GAP_X = 42, NODE_GAP_Y = 72;
   const GEN_LABELS = ['Great-grandparents', 'Grandparents', 'Parents', 'Children', 'Grandchildren'];
   const GEN_H = NODE_H + NODE_GAP_Y;
 
@@ -1195,7 +1225,7 @@
   try { const t = localStorage.getItem('ftree_theme'); if (t) theme = t; } catch(e) {}
   applyTheme();
 
-  /* ── Layout (Groups connected spouses together & orders siblings 1 -> last) ── */
+  /* ── Layout (Groups spouses together, orders siblings 1 -> last, detects sibling groups) ── */
   function computeLayout() {
     const gens = {};
     people.forEach(p => {
@@ -1205,6 +1235,7 @@
     });
 
     const partnerClusters = [];
+    const siblingGroups = [];
 
     Object.keys(gens).sort((a, b) => Number(a) - Number(b)).forEach(g => {
       const members = gens[g];
@@ -1226,7 +1257,7 @@
 
       members.sort(baseCompare);
 
-      // Build connected partner groups (BFS so multi-spouse families stay in one contiguous cluster)
+      // Build connected partner groups
       const arranged = [];
       const visited = new Set();
 
@@ -1248,7 +1279,6 @@
           });
         }
 
-        // Keep the primary member (with parents or order) on the left of their partner(s)
         cluster.sort(baseCompare);
         arranged.push(...cluster);
         if (cluster.length > 1) {
@@ -1257,6 +1287,34 @@
       });
 
       gens[g] = arranged;
+
+      // Group brothers & sisters who share at least one parent
+      const sibVisited = new Set();
+      arranged.forEach(m => {
+        if (sibVisited.has(m.id)) return;
+        if (!m.parents || m.parents.length === 0) return;
+
+        const group = [];
+        const queue = [m];
+        sibVisited.add(m.id);
+
+        while (queue.length > 0) {
+          const curr = queue.shift();
+          group.push(curr);
+          arranged.forEach(cand => {
+            if (sibVisited.has(cand.id) || !cand.parents || cand.parents.length === 0) return;
+            const sharesParent = curr.parents.some(pid => cand.parents.includes(pid));
+            if (sharesParent) {
+              sibVisited.add(cand.id);
+              queue.push(cand);
+            }
+          });
+        }
+
+        if (group.length > 1) {
+          siblingGroups.push(group.map(x => x.id));
+        }
+      });
     });
 
     const positions = {};
@@ -1270,17 +1328,17 @@
       });
     });
 
-    return { positions, partnerClusters };
+    return { positions, partnerClusters, siblingGroups };
   }
 
   /* ── Render ── */
   function render() {
-    Array.from(canvas.querySelectorAll('.person-node,.partner-heart,.gen-label,.couple-box')).forEach(el => el.remove());
+    Array.from(canvas.querySelectorAll('.person-node,.partner-heart,.gen-label,.couple-box,.sibling-box')).forEach(el => el.remove());
     svg.innerHTML = '';
     emptyState.classList.toggle('hidden', people.length > 0);
     if (people.length === 0) return;
 
-    const { positions: pos, partnerClusters } = computeLayout();
+    const { positions: pos, partnerClusters, siblingGroups } = computeLayout();
     const xs = Object.values(pos).map(p => p.x);
     const ys = Object.values(pos).map(p => p.y);
     const minX = Math.min(...xs) - NODE_W;
@@ -1306,17 +1364,36 @@
       canvas.appendChild(lbl);
     });
 
-    // Draw ONE unified dotted rectangular enclosure per partner cluster & connect adjacent spouses
+    // 1. Draw outer dotted rectangular boundary around brothers & sisters
+    siblingGroups.forEach(sibIds => {
+      const coords = sibIds.map(id => pos[id]).filter(Boolean);
+      if (coords.length < 2) return;
+
+      const leftX = Math.min(...coords.map(c => c.x)) + ox - 16;
+      const rightX = Math.max(...coords.map(c => c.x)) + ox + NODE_W + 16;
+      const topY = Math.min(...coords.map(c => c.y)) + oy - 16;
+      const bottomY = Math.max(...coords.map(c => c.y)) + oy + NODE_H + 20;
+
+      const sBox = document.createElement('div');
+      sBox.className = 'sibling-box';
+      sBox.style.left = leftX + 'px';
+      sBox.style.top = topY + 'px';
+      sBox.style.width = (rightX - leftX) + 'px';
+      sBox.style.height = (bottomY - topY) + 'px';
+      canvas.appendChild(sBox);
+    });
+
+    // 2. Draw inner dotted rectangular enclosure around wife & husband
     partnerClusters.forEach(clusterIds => {
       const clusterCoords = clusterIds.map(id => ({ id, pos: pos[id] })).filter(x => x.pos);
       if (clusterCoords.length < 2) return;
 
       clusterCoords.sort((a, b) => a.pos.x - b.pos.x);
 
-      const leftX = clusterCoords[0].pos.x + ox - 10;
-      const rightX = clusterCoords[clusterCoords.length - 1].pos.x + ox + NODE_W + 10;
-      const topY = Math.min(...clusterCoords.map(c => c.pos.y)) + oy - 10;
-      const bottomY = Math.max(...clusterCoords.map(c => c.pos.y)) + oy + NODE_H + 14;
+      const leftX = clusterCoords[0].pos.x + ox - 8;
+      const rightX = clusterCoords[clusterCoords.length - 1].pos.x + ox + NODE_W + 8;
+      const topY = Math.min(...clusterCoords.map(c => c.pos.y)) + oy - 8;
+      const bottomY = Math.max(...clusterCoords.map(c => c.pos.y)) + oy + NODE_H + 12;
 
       const box = document.createElement('div');
       box.className = 'couple-box';
@@ -1326,7 +1403,6 @@
       box.style.height = (bottomY - topY) + 'px';
       canvas.appendChild(box);
 
-      // Draw dashed line + heart strictly between adjacent members so nothing overlaps circles
       for (let i = 0; i < clusterCoords.length - 1; i++) {
         const leftMember = clusterCoords[i];
         const rightMember = clusterCoords[i + 1];
@@ -1351,7 +1427,7 @@
       }
     });
 
-    // Parent -> Child branch lines
+    // 3. Parent -> Child branch lines
     people.forEach(p => {
       const pp = pos[p.id];
       if (!pp) return;
@@ -1364,7 +1440,7 @@
         const cx = cp.x + ox + NODE_W / 2;
         const cy = cp.y + oy;
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const my = cy - 20;
+        const my = cy - 22;
         path.setAttribute('d', 'M' + px + ',' + (py + NODE_H) + ' C' + px + ',' + my + ' ' + cx + ',' + my + ' ' + cx + ',' + cy);
         path.setAttribute('class', 'connector-line');
         if (p.color) path.style.stroke = p.color;
@@ -1372,7 +1448,7 @@
       });
     });
 
-    // Person nodes
+    // 4. Person nodes
     people.forEach(p => {
       const pp = pos[p.id];
       if (!pp) return;
@@ -1536,7 +1612,7 @@
       .map(x => '<option value="' + x.id + '">' + fullName(x) + '</option>').join('');
     const blank = '<option value="">— select person —</option>';
     document.getElementById('parent-select').innerHTML = blank + opts;
-    document.getElementById('child-select').innerHTML = blank + opts;
+    document.getElementById('child-select').innerHTML = '<option value="">— link existing person —</option>' + opts;
     document.getElementById('partner-select').innerHTML = blank + opts;
   }
 
@@ -1713,19 +1789,68 @@
     render();
   });
 
-  /* ── Add person modal ── */
-  document.getElementById('btn-add').addEventListener('click', () => {
+  /* ── Add person modal & Quick "+ New Child" modal ── */
+  function openNewPersonModal(parentPerson = null) {
     if (!isEditor) return;
+    pendingParentIds = [];
+
     document.getElementById('new-first').value = '';
-    document.getElementById('new-last').value = '';
     document.getElementById('new-birth').value = '';
-    document.getElementById('new-order').value = '';
-    document.getElementById('new-gen').value = '2';
     document.getElementById('new-color').value = '#7c5c3a';
+
+    const titleEl = document.getElementById('modal-title');
+    const hintEl = document.getElementById('modal-parent-hint');
+
+    if (parentPerson) {
+      pendingParentIds = [parentPerson.id, ...(parentPerson.partners || [])];
+      const parentNames = pendingParentIds
+        .map(pid => people.find(x => x.id === pid))
+        .filter(Boolean)
+        .map(x => fullName(x))
+        .join(' & ');
+
+      titleEl.textContent = 'Add Child';
+      hintEl.innerHTML = 'Parents: <strong>' + parentNames + '</strong>';
+      hintEl.hidden = false;
+
+      document.getElementById('new-last').value = parentPerson.last || '';
+      const childGen = Math.min(4, parentPerson.gen + 1);
+      document.getElementById('new-gen').value = String(childGen);
+
+      // Suggest next order number automatically based on existing children
+      const existingChildren = (parentPerson.children || [])
+        .map(cid => people.find(x => x.id === cid))
+        .filter(Boolean);
+      const maxOrder = existingChildren.reduce((max, c) => Math.max(max, Number(c.order) || 0), 0);
+      const nextOrder = existingChildren.length === 0 ? 1 : (maxOrder > 0 ? maxOrder + 1 : existingChildren.length + 1);
+      document.getElementById('new-order').value = String(nextOrder);
+    } else {
+      titleEl.textContent = 'New family member';
+      hintEl.hidden = true;
+      document.getElementById('new-last').value = '';
+      document.getElementById('new-order').value = '';
+      document.getElementById('new-gen').value = '2';
+    }
+
     modal.hidden = false;
     setTimeout(() => document.getElementById('new-first').focus(), 50);
+  }
+
+  document.getElementById('btn-add').addEventListener('click', () => {
+    openNewPersonModal(null);
   });
-  function closeModal() { modal.hidden = true; }
+
+  document.getElementById('btn-quick-new-child').addEventListener('click', () => {
+    if (!isEditor || !selectedId) return;
+    const parent = people.find(x => x.id === selectedId);
+    if (!parent) return;
+    openNewPersonModal(parent);
+  });
+
+  function closeModal() {
+    modal.hidden = true;
+    pendingParentIds = [];
+  }
   document.getElementById('btn-modal-close').addEventListener('click', closeModal);
   document.getElementById('btn-modal-cancel').addEventListener('click', closeModal);
   modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
@@ -1736,8 +1861,12 @@
     if (!first) { document.getElementById('new-first').focus(); return; }
     const pickedColor = document.getElementById('new-color').value;
     const ordVal = document.getElementById('new-order').value.trim();
+
+    const newChildId = nextId++;
+    const validParents = pendingParentIds.filter(pid => people.some(x => x.id === pid));
+
     const p = {
-      id: nextId++,
+      id: newChildId,
       first,
       last: document.getElementById('new-last').value.trim(),
       birth: document.getElementById('new-birth').value.trim(),
@@ -1745,10 +1874,27 @@
       order: ordVal !== '' ? parseInt(ordVal, 10) : null,
       color: pickedColor === '#7c5c3a' ? null : pickedColor,
       gen: parseInt(document.getElementById('new-gen').value),
-      parents: [], children: [], partners: []
+      parents: [...validParents],
+      children: [],
+      partners: []
     };
+
+    // Link this new child back onto each parent's children array
+    validParents.forEach(pid => {
+      const parentObj = people.find(x => x.id === pid);
+      if (parentObj && !parentObj.children.includes(newChildId)) {
+        parentObj.children.push(newChildId);
+      }
+    });
+
     people.push(p);
-    save(); closeModal(); render();
+    syncGenerations();
+    save();
+    closeModal();
+    render();
+    if (selectedId && panel.classList.contains('open')) {
+      refreshPanelData(selectedId);
+    }
     if (people.length === 1) fitToScreen();
   });
 

@@ -82,20 +82,21 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0.75rem max(16px, env(safe-area-inset-left, 0px));
-      padding-right: max(16px, env(safe-area-inset-right, 0px));
+      padding: 0.65rem max(12px, env(safe-area-inset-left, 0px));
+      padding-right: max(12px, env(safe-area-inset-right, 0px));
       background: var(--bg2);
       border-bottom: 1px solid var(--node-border);
-      gap: 0.75rem;
+      gap: 0.5rem;
       flex-shrink: 0;
       z-index: 20;
+      flex-wrap: wrap;
     }
 
-    .header-left { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+    .header-left { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
 
     h1 {
       font-family: 'Playfair Display', Georgia, serif;
-      font-size: 1.25rem;
+      font-size: 1.2rem;
       font-weight: 600;
       color: var(--accent);
       white-space: nowrap;
@@ -114,7 +115,7 @@
     .sync-badge.live { color: #2e7d32; border-color: color-mix(in srgb, #2e7d32 40%, transparent); }
     .sync-badge.err { color: #c0392b; border-color: color-mix(in srgb, #c0392b 40%, transparent); }
 
-    .header-actions { display: flex; gap: 0.45rem; align-items: center; }
+    .header-actions { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 
     button {
       font-family: inherit;
@@ -123,8 +124,9 @@
       cursor: pointer;
       border: none;
       border-radius: 6px;
-      padding: 0.4rem 0.8rem;
+      padding: 0.4rem 0.75rem;
       transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
     }
     button:active { transform: scale(0.97); }
 
@@ -189,9 +191,9 @@
       width: 72px;
       height: 72px;
       border-radius: 50%;
-      border: 3px solid var(--node-border);
+      border: 3px solid var(--node-color, var(--node-border));
       overflow: hidden;
-      background: var(--node-bg);
+      background: color-mix(in srgb, var(--node-color, var(--node-bg)) 14%, var(--node-bg));
       display: flex;
       align-items: center;
       justify-content: center;
@@ -202,8 +204,8 @@
 
     .person-node:hover .node-photo,
     .person-node.selected .node-photo {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+      border-color: var(--node-color, var(--accent));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-color, var(--accent)) 28%, transparent);
     }
 
     .node-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -212,7 +214,7 @@
       font-family: 'Playfair Display', serif;
       font-size: 1.3rem;
       font-weight: 700;
-      color: var(--accent);
+      color: var(--node-color, var(--accent));
     }
 
     .node-name {
@@ -302,8 +304,8 @@
       height: 100px;
       border-radius: 50%;
       overflow: hidden;
-      border: 3px solid var(--accent);
-      background: var(--node-bg);
+      border: 3px solid var(--node-color, var(--accent));
+      background: color-mix(in srgb, var(--node-color, var(--node-bg)) 14%, var(--node-bg));
       display: flex;
       align-items: center;
       justify-content: center;
@@ -317,7 +319,7 @@
       font-family: 'Playfair Display', serif;
       font-size: 2rem;
       font-weight: 700;
-      color: var(--accent);
+      color: var(--node-color, var(--accent));
     }
     .photo-big:not(.readonly):hover .photo-overlay { opacity: 1; }
     .photo-big .photo-overlay {
@@ -352,6 +354,38 @@
     .field input:disabled, .field textarea:disabled, .field select:disabled { opacity: 0.8; cursor: default; }
     .field textarea { resize: vertical; min-height: 60px; }
     .field select option { background: var(--bg2); }
+
+    /* Color picker row & swatches */
+    .color-picker-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    input[type="color"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 38px;
+      height: 36px;
+      border: 1px solid var(--node-border);
+      border-radius: 6px;
+      background: var(--bg);
+      padding: 2px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+    .swatch-list { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; }
+    .swatch-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      padding: 0;
+      border: 2px solid var(--node-border);
+      flex-shrink: 0;
+    }
+    .swatch-btn:hover { transform: scale(1.12); }
 
     .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 
@@ -456,7 +490,7 @@
     .empty-title { font-family: 'Playfair Display', serif; font-size: 1.25rem; color: var(--fg2); }
     .empty-sub { font-size: 0.875rem; text-align: center; max-width: 280px; }
 
-    @media (max-width: 540px) {
+    @media (max-width: 600px) {
       h1 { font-size: 1rem; }
       #panel { width: 100vw; }
       .field-row { grid-template-columns: 1fr; }
@@ -475,6 +509,9 @@
       <span id="sync-status" class="sync-badge">Connecting...</span>
     </div>
     <div class="header-actions">
+      <button class="btn-ghost" id="btn-export" title="Download safety backup (.json)">&#8595; Export</button>
+      <button class="btn-ghost" id="btn-import" title="Restore from backup file (.json)" hidden>&#8593; Import</button>
+      <input type="file" id="import-input" accept=".json,application/json" style="display:none">
       <button class="btn-ghost btn-icon" id="btn-theme" title="Toggle theme">&#9788;&#65038;</button>
       <button class="btn-ghost btn-icon" id="btn-fit" title="Fit to screen">&#8861;</button>
       <button class="btn-ghost" id="btn-auth">&#128274; Editor Login</button>
@@ -519,6 +556,23 @@
       </div>
       <input type="file" id="photo-input" accept="image/*">
       <span id="photo-hint" style="font-size:0.75rem;color:var(--fg3)">Click to upload photo</span>
+    </div>
+
+    <!-- Node Color Picker -->
+    <div class="field editor-only" id="color-field-wrap">
+      <label for="edit-color">Node Color</label>
+      <div class="color-picker-row">
+        <input id="edit-color" type="color" value="#7c5c3a" title="Pick custom color">
+        <div class="swatch-list" id="edit-swatches">
+          <button type="button" class="swatch-btn" data-color="#7c5c3a" style="background:#7c5c3a" title="Bronze"></button>
+          <button type="button" class="swatch-btn" data-color="#2b6cb0" style="background:#2b6cb0" title="Blue"></button>
+          <button type="button" class="swatch-btn" data-color="#2f855a" style="background:#2f855a" title="Green"></button>
+          <button type="button" class="swatch-btn" data-color="#b83280" style="background:#b83280" title="Rose"></button>
+          <button type="button" class="swatch-btn" data-color="#6b46c1" style="background:#6b46c1" title="Purple"></button>
+          <button type="button" class="swatch-btn" data-color="#c05621" style="background:#c05621" title="Amber"></button>
+        </div>
+        <button type="button" class="btn-ghost" id="btn-reset-color" style="padding:0.25rem 0.5rem;font-size:0.75rem;">Reset</button>
+      </div>
     </div>
 
     <div class="field-row">
@@ -629,6 +683,20 @@
           </select>
         </div>
       </div>
+      <div class="field">
+        <label for="new-color">Node Color</label>
+        <div class="color-picker-row">
+          <input id="new-color" type="color" value="#7c5c3a">
+          <div class="swatch-list" id="new-swatches">
+            <button type="button" class="swatch-btn" data-color="#7c5c3a" style="background:#7c5c3a" title="Bronze"></button>
+            <button type="button" class="swatch-btn" data-color="#2b6cb0" style="background:#2b6cb0" title="Blue"></button>
+            <button type="button" class="swatch-btn" data-color="#2f855a" style="background:#2f855a" title="Green"></button>
+            <button type="button" class="swatch-btn" data-color="#b83280" style="background:#b83280" title="Rose"></button>
+            <button type="button" class="swatch-btn" data-color="#6b46c1" style="background:#6b46c1" title="Purple"></button>
+            <button type="button" class="swatch-btn" data-color="#c05621" style="background:#c05621" title="Amber"></button>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn-ghost" id="btn-modal-cancel">Cancel</button>
@@ -688,6 +756,9 @@
   const syncBadge = document.getElementById('sync-status');
   const btnAuth = document.getElementById('btn-auth');
   const btnAdd = document.getElementById('btn-add');
+  const btnImport = document.getElementById('btn-import');
+  const btnExport = document.getElementById('btn-export');
+  const importInput = document.getElementById('import-input');
   const loginBackdrop = document.getElementById('login-backdrop');
   const loginError = document.getElementById('login-error');
 
@@ -716,6 +787,7 @@
 
   function updateEditorUI() {
     btnAdd.hidden = !isEditor;
+    btnImport.hidden = !isEditor;
     btnAuth.textContent = isEditor ? 'Sign Out' : '🔒 Editor Login';
     document.getElementById('readonly-banner').hidden = isEditor;
     document.getElementById('photo-hint').hidden = !isEditor;
@@ -766,7 +838,6 @@
     try {
       await signInWithEmailAndPassword(auth, email, pass);
       loginBackdrop.hidden = true;
-      // If local browser had edits made before logging in, sync them up
       if (people.length > 0) save();
     } catch (err) {
       loginError.textContent = 'Invalid email or password.';
@@ -777,10 +848,83 @@
     }
   });
 
+  /* ── Export & Import Safety Backups (Mobile & Web Compatible) ── */
+  btnExport.addEventListener('click', async () => {
+    const payload = JSON.stringify({
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      nextId,
+      people
+    }, null, 2);
+    const filename = 'family-tree-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    const blob = new Blob([payload], { type: 'application/json' });
+
+    // Mobile Web Share API support if available for files, with standard download fallback
+    try {
+      const file = new File([blob], filename, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+        await navigator.share({
+          files: [file],
+          title: 'Family Tree Backup'
+        });
+        return;
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  btnImport.addEventListener('click', () => {
+    if (!isEditor) return;
+    importInput.click();
+  });
+
+  importInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file || !isEditor) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const parsed = JSON.parse(ev.target.result);
+        const importedList = Array.isArray(parsed) ? parsed : parsed.people;
+        if (!Array.isArray(importedList)) {
+          alert('Invalid backup file: missing family member data.');
+          return;
+        }
+        if (!confirm('Replace the current tree with ' + importedList.length + ' people from this backup file?')) {
+          return;
+        }
+        people = normalizePeople(importedList);
+        nextId = parsed.nextId || (Math.max(0, ...people.map(p => Number(p.id) || 0)) + 1);
+        syncGenerations();
+        selectedId = null;
+        panel.classList.remove('open');
+        save();
+        render();
+        if (people.length > 0) fitToScreen();
+        alert('Backup restored successfully!');
+      } catch (err) {
+        alert('Could not read backup file. Please make sure it is a valid .json file.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
   /* ── Normalize Arrays ── */
   function normalizePeople(list) {
     return (list || []).filter(Boolean).map(p => ({
       ...p,
+      color: p.color || null,
       parents: Array.isArray(p.parents) ? p.parents : [],
       children: Array.isArray(p.children) ? p.children : [],
       partners: Array.isArray(p.partners) ? p.partners : []
@@ -991,6 +1135,7 @@
         const my = cy - 20;
         path.setAttribute('d', 'M' + px + ',' + (py + NODE_H) + ' C' + px + ',' + my + ' ' + cx + ',' + my + ' ' + cx + ',' + cy);
         path.setAttribute('class', 'connector-line');
+        if (p.color) path.style.stroke = p.color;
         svg.appendChild(path);
       });
 
@@ -1027,6 +1172,9 @@
       node.style.left = (pp.x + ox) + 'px';
       node.style.top = (pp.y + oy) + 'px';
       node.dataset.id = p.id;
+      if (p.color) {
+        node.style.setProperty('--node-color', p.color);
+      }
 
       const photoDiv = document.createElement('div');
       photoDiv.className = 'node-photo';
@@ -1063,7 +1211,62 @@
   function fullName(p) { return [p.first, p.last].filter(Boolean).join(' ') || 'Unnamed'; }
   function initials(p) { return [(p.first || '')[0], (p.last || '')[0]].filter(Boolean).join('').toUpperCase() || '?'; }
 
-  /* ── Panel ── */
+  /* ── Panel & Color Picker Controls ── */
+  const editColorInput = document.getElementById('edit-color');
+  const panelPhotoBtn = document.getElementById('panel-photo-btn');
+
+  function applyPanelColorPreview(colorHex) {
+    if (colorHex) {
+      panelPhotoBtn.style.setProperty('--node-color', colorHex);
+    } else {
+      panelPhotoBtn.style.removeProperty('--node-color');
+    }
+  }
+
+  editColorInput.addEventListener('input', e => {
+    if (!isEditor || !selectedId) return;
+    const p = people.find(x => x.id === selectedId);
+    if (!p) return;
+    p.color = e.target.value;
+    applyPanelColorPreview(p.color);
+    render();
+  });
+
+  editColorInput.addEventListener('change', () => {
+    if (!isEditor || !selectedId) return;
+    save();
+  });
+
+  document.getElementById('edit-swatches').addEventListener('click', e => {
+    const btn = e.target.closest('.swatch-btn');
+    if (!btn || !isEditor || !selectedId) return;
+    const hex = btn.dataset.color;
+    editColorInput.value = hex;
+    const p = people.find(x => x.id === selectedId);
+    if (!p) return;
+    p.color = hex;
+    applyPanelColorPreview(hex);
+    save();
+    render();
+  });
+
+  document.getElementById('btn-reset-color').addEventListener('click', () => {
+    if (!isEditor || !selectedId) return;
+    const p = people.find(x => x.id === selectedId);
+    if (!p) return;
+    p.color = null;
+    editColorInput.value = '#7c5c3a';
+    applyPanelColorPreview(null);
+    save();
+    render();
+  });
+
+  document.getElementById('new-swatches').addEventListener('click', e => {
+    const btn = e.target.closest('.swatch-btn');
+    if (!btn) return;
+    document.getElementById('new-color').value = btn.dataset.color;
+  });
+
   function refreshPanelData(id) {
     const p = people.find(x => x.id === id);
     if (!p) return;
@@ -1074,6 +1277,8 @@
     document.getElementById('edit-death').value = p.death || '';
     document.getElementById('edit-gen').value = String(p.gen);
     document.getElementById('edit-notes').value = p.notes || '';
+    editColorInput.value = p.color || '#7c5c3a';
+    applyPanelColorPreview(p.color);
 
     const img = document.getElementById('panel-photo-img');
     const ini = document.getElementById('panel-photo-initials');
@@ -1265,6 +1470,7 @@
     document.getElementById('new-last').value = '';
     document.getElementById('new-birth').value = '';
     document.getElementById('new-gen').value = '2';
+    document.getElementById('new-color').value = '#7c5c3a';
     modal.hidden = false;
     setTimeout(() => document.getElementById('new-first').focus(), 50);
   });
@@ -1277,12 +1483,14 @@
     if (!isEditor) return;
     const first = document.getElementById('new-first').value.trim();
     if (!first) { document.getElementById('new-first').focus(); return; }
+    const pickedColor = document.getElementById('new-color').value;
     const p = {
       id: nextId++,
       first,
       last: document.getElementById('new-last').value.trim(),
       birth: document.getElementById('new-birth').value.trim(),
       death: '', notes: '', photo: null,
+      color: pickedColor === '#7c5c3a' ? null : pickedColor,
       gen: parseInt(document.getElementById('new-gen').value),
       parents: [], children: [], partners: []
     };

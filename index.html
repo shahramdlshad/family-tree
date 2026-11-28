@@ -538,11 +538,28 @@
 
     .parent-link-hint {
       font-size: 0.78rem;
-      padding: 0.45rem 0.65rem;
+      padding: 0.5rem 0.65rem;
       border-radius: 6px;
       background: color-mix(in srgb, var(--accent) 12%, var(--bg));
       border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
       color: var(--fg2);
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+    .parent-checkbox-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .parent-checkbox-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--fg);
+      cursor: pointer;
     }
 
     .login-error {
@@ -645,7 +662,7 @@
       <button type="button" class="btn-ghost editor-only" id="btn-remove-photo" style="padding:0.25rem 0.65rem;font-size:0.75rem;" hidden>Remove Photo</button>
     </div>
 
-    <!-- Node Color Picker (14 curated swatches + custom color wheel) -->
+    <!-- Node Color Picker -->
     <div class="field editor-only" id="color-field-wrap">
       <div class="color-picker-header">
         <label for="edit-color">Node Color</label>
@@ -726,7 +743,7 @@
       </div>
     </div>
 
-    <!-- Children (with instant "+ New Child" shortcut button) -->
+    <!-- Children -->
     <div class="rel-section">
       <div class="rel-section-header">
         <h3>Children</h3>
@@ -886,7 +903,7 @@
   let isRemoteUpdate = false;
   let hasInitialFit = false;
   let initialCloudLoaded = false;
-  let pendingParentIds = [];
+  let modalMode = 'person';
 
   /* ── State ── */
   let people = [];
@@ -896,7 +913,7 @@
   let isPanning = false, panStart = null;
   let theme = 'system';
 
-  const NODE_W = 110, NODE_H = 110, NODE_GAP_X = 42, NODE_GAP_Y = 72;
+  const NODE_W = 110, NODE_H = 110, NODE_GAP_X = 48, NODE_GAP_Y = 74;
   const GEN_LABELS = ['Great-grandparents', 'Grandparents', 'Parents', 'Children', 'Grandchildren'];
   const GEN_H = NODE_H + NODE_GAP_Y;
 
@@ -1225,7 +1242,10 @@
   try { const t = localStorage.getItem('ftree_theme'); if (t) theme = t; } catch(e) {}
   applyTheme();
 
-  /* ── Layout (Groups spouses together, orders siblings 1 -> last, detects sibling groups) ── */
+  /* ── Layout:
+       1. Centers a hub spouse between 2 wives: [Wife 1] — [Hub] — [Wife 2]
+       2. Groups children separately by each mother (Wife 1's children on left, Wife 2's children on right)
+       3. Creates separate sibling boxes for each mother's children ── */
   function computeLayout() {
     const gens = {};
     people.forEach(p => {
@@ -1242,12 +1262,28 @@
       const prevGen = gens[parseInt(g) - 1] || [];
 
       const baseCompare = (a, b) => {
-        const aParent = (a.parents || []).find(pid => prevGen.some(x => x.id === pid));
-        const bParent = (b.parents || []).find(pid => prevGen.some(x => x.id === pid));
-        const aIdx = aParent ? prevGen.findIndex(x => x.id === aParent) : 999;
-        const bIdx = bParent ? prevGen.findIndex(x => x.id === bParent) : 999;
-        if (aIdx !== bIdx) return aIdx - bIdx;
+        // Primary sort by parent position in the generation above (so Wife 1's kids sit left of Wife 2's kids)
+        const aParentIndices = (a.parents || [])
+          .map(pid => prevGen.findIndex(x => x.id === pid))
+          .filter(idx => idx !== -1);
+        const bParentIndices = (b.parents || [])
+          .map(pid => prevGen.findIndex(x => x.id === pid))
+          .filter(idx => idx !== -1);
 
+        // Prefer the non-shared parent (mother) index if parents differ, otherwise average parent index
+        const aOnly = aParentIndices.filter(idx => !bParentIndices.includes(idx));
+        const bOnly = bParentIndices.filter(idx => !aParentIndices.includes(idx));
+
+        const aScore = aOnly.length > 0
+          ? Math.min(...aOnly)
+          : (aParentIndices.length > 0 ? aParentIndices.reduce((s, v) => s + v, 0) / aParentIndices.length : 999);
+        const bScore = bOnly.length > 0
+          ? Math.min(...bOnly)
+          : (bParentIndices.length > 0 ? bParentIndices.reduce((s, v) => s + v, 0) / bParentIndices.length : 999);
+
+        if (aScore !== bScore) return aScore - bScore;
+
+        // Secondary sort by explicit child order (#1, #2, #3...)
         const aOrd = (a.order !== null && a.order !== undefined) ? Number(a.order) : 999999;
         const bOrd = (b.order !== null && b.order !== undefined) ? Number(b.order) : 999999;
         if (aOrd !== bOrd) return aOrd - bOrd;
@@ -1280,6 +1316,16 @@
         }
 
         cluster.sort(baseCompare);
+
+        // If 1 person has 2 partners (e.g. [Hub, Wife 1, Wife 2]), place Hub in the middle: [Wife 1, Hub, Wife 2]
+        if (cluster.length === 3) {
+          const hub = cluster.find(c => (c.partners || []).filter(pid => cluster.some(x => x.id === pid)).length === 2);
+          if (hub) {
+            const spouses = cluster.filter(c => c.id !== hub.id).sort(baseCompare);
+            cluster.splice(0, 3, spouses[0], hub, spouses[1]);
+          }
+        }
+
         arranged.push(...cluster);
         if (cluster.length > 1) {
           partnerClusters.push(cluster.map(x => x.id));
@@ -1288,31 +1334,18 @@
 
       gens[g] = arranged;
 
-      // Group brothers & sisters who share at least one parent
-      const sibVisited = new Set();
+      // Group brothers & sisters by exact parent set (so Wife 1's kids and Wife 2's kids get separate dotted boxes)
+      const parentSetMap = new Map();
       arranged.forEach(m => {
-        if (sibVisited.has(m.id)) return;
         if (!m.parents || m.parents.length === 0) return;
+        const key = [...m.parents].sort((a, b) => a - b).join(',');
+        if (!parentSetMap.has(key)) parentSetMap.set(key, []);
+        parentSetMap.get(key).push(m.id);
+      });
 
-        const group = [];
-        const queue = [m];
-        sibVisited.add(m.id);
-
-        while (queue.length > 0) {
-          const curr = queue.shift();
-          group.push(curr);
-          arranged.forEach(cand => {
-            if (sibVisited.has(cand.id) || !cand.parents || cand.parents.length === 0) return;
-            const sharesParent = curr.parents.some(pid => cand.parents.includes(pid));
-            if (sharesParent) {
-              sibVisited.add(cand.id);
-              queue.push(cand);
-            }
-          });
-        }
-
-        if (group.length > 1) {
-          siblingGroups.push(group.map(x => x.id));
+      parentSetMap.forEach(groupIds => {
+        if (groupIds.length > 1) {
+          siblingGroups.push(groupIds);
         }
       });
     });
@@ -1364,7 +1397,7 @@
       canvas.appendChild(lbl);
     });
 
-    // 1. Draw outer dotted rectangular boundary around brothers & sisters
+    // 1. Draw outer dotted rectangular boundary around brothers & sisters (separated per mother/parent-pair)
     siblingGroups.forEach(sibIds => {
       const coords = sibIds.map(id => pos[id]).filter(Boolean);
       if (coords.length < 2) return;
@@ -1383,7 +1416,7 @@
       canvas.appendChild(sBox);
     });
 
-    // 2. Draw inner dotted rectangular enclosure around wife & husband
+    // 2. Draw inner dotted rectangular enclosure around partners
     partnerClusters.forEach(clusterIds => {
       const clusterCoords = clusterIds.map(id => ({ id, pos: pos[id] })).filter(x => x.pos);
       if (clusterCoords.length < 2) return;
@@ -1427,25 +1460,52 @@
       }
     });
 
-    // 3. Parent -> Child branch lines
-    people.forEach(p => {
-      const pp = pos[p.id];
-      if (!pp) return;
-      const px = pp.x + ox + NODE_W / 2;
-      const py = pp.y + oy;
+    // 3. Parent -> Child branch lines (routes from midpoint between Mother & Father when both are linked)
+    const drawnChildBranches = new Set();
+    people.forEach(child => {
+      const cp = pos[child.id];
+      if (!cp || !child.parents || child.parents.length === 0) return;
 
-      (p.children || []).forEach(childId => {
-        const cp = pos[childId];
-        if (!cp) return;
-        const cx = cp.x + ox + NODE_W / 2;
-        const cy = cp.y + oy;
+      const validParents = child.parents
+        .map(pid => people.find(x => x.id === pid))
+        .filter(p => p && pos[p.id]);
+
+      if (validParents.length === 0) return;
+
+      const cx = cp.x + ox + NODE_W / 2;
+      const cy = cp.y + oy;
+
+      // If child has 2 parents who are partners, branch cleanly from the midpoint between those two parents
+      if (validParents.length === 2 && (validParents[0].partners || []).includes(validParents[1].id)) {
+        const p1 = pos[validParents[0].id];
+        const p2 = pos[validParents[1].id];
+        const px = ((p1.x + p2.x) / 2) + ox + NODE_W / 2;
+        const py = Math.max(p1.y, p2.y) + oy;
+
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         const my = cy - 22;
-        path.setAttribute('d', 'M' + px + ',' + (py + NODE_H) + ' C' + px + ',' + my + ' ' + cx + ',' + my + ' ' + cx + ',' + cy);
+        path.setAttribute('d', 'M' + px + ',' + (py + NODE_H - 18) + ' C' + px + ',' + my + ' ' + cx + ',' + my + ' ' + cx + ',' + cy);
         path.setAttribute('class', 'connector-line');
-        if (p.color) path.style.stroke = p.color;
+        const branchColor = validParents[1].color || validParents[0].color;
+        if (branchColor) path.style.stroke = branchColor;
         svg.appendChild(path);
-      });
+      } else {
+        validParents.forEach(p => {
+          const branchKey = p.id + '->' + child.id;
+          if (drawnChildBranches.has(branchKey)) return;
+          drawnChildBranches.add(branchKey);
+          const pp = pos[p.id];
+          const px = pp.x + ox + NODE_W / 2;
+          const py = pp.y + oy;
+
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          const my = cy - 22;
+          path.setAttribute('d', 'M' + px + ',' + (py + NODE_H) + ' C' + px + ',' + my + ' ' + cx + ',' + my + ' ' + cx + ',' + cy);
+          path.setAttribute('class', 'connector-line');
+          if (p.color) path.style.stroke = p.color;
+          svg.appendChild(path);
+        });
+      }
     });
 
     // 4. Person nodes
@@ -1789,10 +1849,10 @@
     render();
   });
 
-  /* ── Add person modal & Quick "+ New Child" modal ── */
+  /* ── Add person modal & Quick "+ New Child" modal with selectable mother/father ── */
   function openNewPersonModal(parentPerson = null) {
     if (!isEditor) return;
-    pendingParentIds = [];
+    modalMode = parentPerson ? 'child' : 'person';
 
     document.getElementById('new-first').value = '';
     document.getElementById('new-birth').value = '';
@@ -1802,22 +1862,28 @@
     const hintEl = document.getElementById('modal-parent-hint');
 
     if (parentPerson) {
-      pendingParentIds = [parentPerson.id, ...(parentPerson.partners || [])];
-      const parentNames = pendingParentIds
+      const partners = (parentPerson.partners || [])
         .map(pid => people.find(x => x.id === pid))
-        .filter(Boolean)
-        .map(x => fullName(x))
-        .join(' & ');
+        .filter(Boolean);
 
       titleEl.textContent = 'Add Child';
-      hintEl.innerHTML = 'Parents: <strong>' + parentNames + '</strong>';
+      let html = '<div>Select Parent(s) for this child:</div><div class="parent-checkbox-list">';
+      html += '<label class="parent-checkbox-item"><input type="checkbox" name="modal-parent-cb" value="' + parentPerson.id + '" checked> ' + fullName(parentPerson) + '</label>';
+
+      // If parent has 1 spouse, check both by default; if 2+ spouses, leave spouses unchecked so you pick which wife
+      const autoCheckSpouse = partners.length === 1;
+      partners.forEach(sp => {
+        html += '<label class="parent-checkbox-item"><input type="checkbox" name="modal-parent-cb" value="' + sp.id + '"' + (autoCheckSpouse ? ' checked' : '') + '> ' + fullName(sp) + '</label>';
+      });
+      html += '</div>';
+
+      hintEl.innerHTML = html;
       hintEl.hidden = false;
 
       document.getElementById('new-last').value = parentPerson.last || '';
       const childGen = Math.min(4, parentPerson.gen + 1);
       document.getElementById('new-gen').value = String(childGen);
 
-      // Suggest next order number automatically based on existing children
       const existingChildren = (parentPerson.children || [])
         .map(cid => people.find(x => x.id === cid))
         .filter(Boolean);
@@ -1827,6 +1893,7 @@
     } else {
       titleEl.textContent = 'New family member';
       hintEl.hidden = true;
+      hintEl.innerHTML = '';
       document.getElementById('new-last').value = '';
       document.getElementById('new-order').value = '';
       document.getElementById('new-gen').value = '2';
@@ -1849,7 +1916,7 @@
 
   function closeModal() {
     modal.hidden = true;
-    pendingParentIds = [];
+    modalMode = 'person';
   }
   document.getElementById('btn-modal-close').addEventListener('click', closeModal);
   document.getElementById('btn-modal-cancel').addEventListener('click', closeModal);
@@ -1862,8 +1929,14 @@
     const pickedColor = document.getElementById('new-color').value;
     const ordVal = document.getElementById('new-order').value.trim();
 
+    let chosenParentIds = [];
+    if (modalMode === 'child') {
+      chosenParentIds = Array.from(document.querySelectorAll('input[name="modal-parent-cb"]:checked'))
+        .map(cb => parseInt(cb.value, 10))
+        .filter(pid => people.some(x => x.id === pid));
+    }
+
     const newChildId = nextId++;
-    const validParents = pendingParentIds.filter(pid => people.some(x => x.id === pid));
 
     const p = {
       id: newChildId,
@@ -1874,13 +1947,12 @@
       order: ordVal !== '' ? parseInt(ordVal, 10) : null,
       color: pickedColor === '#7c5c3a' ? null : pickedColor,
       gen: parseInt(document.getElementById('new-gen').value),
-      parents: [...validParents],
+      parents: [...chosenParentIds],
       children: [],
       partners: []
     };
 
-    // Link this new child back onto each parent's children array
-    validParents.forEach(pid => {
+    chosenParentIds.forEach(pid => {
       const parentObj = people.find(x => x.id === pid);
       if (parentObj && !parentObj.children.includes(newChildId)) {
         parentObj.children.push(newChildId);

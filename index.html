@@ -20,6 +20,7 @@
       --accent: #7c5c3a;
       --accent2: #c9a97a;
       --line: #d4c5b0;
+      --grid-dot: rgba(124, 92, 58, 0.22);
       --node-bg: #ffffff;
       --node-border: #e0d4c3;
       --panel-bg: #ffffff;
@@ -37,6 +38,7 @@
         --accent: #c9a97a;
         --accent2: #7c5c3a;
         --line: #3a332b;
+        --grid-dot: rgba(201, 169, 122, 0.16);
         --node-bg: #2a2420;
         --node-border: #3d352c;
         --panel-bg: #231f1b;
@@ -55,6 +57,7 @@
       --accent: #c9a97a;
       --accent2: #7c5c3a;
       --line: #3a332b;
+      --grid-dot: rgba(201, 169, 122, 0.16);
       --node-bg: #2a2420;
       --node-border: #3d352c;
       --panel-bg: #231f1b;
@@ -124,8 +127,8 @@
       cursor: pointer;
       border: none;
       border-radius: 6px;
-      padding: 0.4rem 0.75rem;
-      transition: background 0.15s, transform 0.1s;
+      padding: 0.4rem 0.7rem;
+      transition: background 0.15s, transform 0.1s, border-color 0.15s;
       white-space: nowrap;
     }
     button:active { transform: scale(0.97); }
@@ -134,13 +137,8 @@
     .btn-primary { background: var(--accent); color: #fff; }
     .btn-primary:hover:not(:disabled) { background: var(--accent2); color: var(--fg); }
 
-    .btn-cloud {
-      background: #2e7d32;
-      color: #fff;
-    }
-    .btn-cloud:hover:not(:disabled) {
-      background: #256428;
-    }
+    .btn-cloud { background: #2e7d32; color: #fff; }
+    .btn-cloud:hover:not(:disabled) { background: #256428; }
 
     .btn-ghost {
       background: transparent;
@@ -148,6 +146,11 @@
       border: 1px solid var(--node-border);
     }
     .btn-ghost:hover:not(:disabled) { background: var(--node-bg); color: var(--fg); }
+    .btn-ghost.active {
+      background: color-mix(in srgb, var(--accent) 18%, var(--bg));
+      color: var(--accent);
+      border-color: var(--accent);
+    }
 
     .btn-icon {
       padding: 0.4rem 0.5rem;
@@ -171,6 +174,11 @@
       position: absolute;
       top: 0; left: 0;
       transform-origin: 0 0;
+    }
+
+    #tree-canvas.show-grid {
+      background-image: radial-gradient(circle, var(--grid-dot) 1.5px, transparent 1.5px);
+      background-size: 40px 40px;
     }
 
     .gen-label {
@@ -215,6 +223,17 @@
       gap: 0.4rem;
       cursor: pointer;
       z-index: 2;
+      user-select: none;
+    }
+
+    .person-node.editable {
+      cursor: grab;
+    }
+    .person-node.dragging {
+      cursor: grabbing;
+      z-index: 25;
+      opacity: 0.92;
+      transform: scale(1.04);
     }
 
     .node-photo-wrap {
@@ -244,7 +263,7 @@
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-color, var(--accent)) 28%, transparent);
     }
 
-    .node-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .node-photo img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
 
     .node-initials {
       font-family: 'Playfair Display', serif;
@@ -505,6 +524,20 @@
       z-index: 10;
     }
 
+    #drag-hint-pill {
+      position: fixed;
+      bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+      left: max(1.25rem, env(safe-area-inset-left, 0px));
+      font-size: 0.72rem;
+      color: var(--fg2);
+      background: var(--bg2);
+      border: 1px solid var(--node-border);
+      padding: 0.35rem 0.7rem;
+      border-radius: 20px;
+      z-index: 10;
+      pointer-events: none;
+    }
+
     .modal-backdrop {
       position: fixed; inset: 0;
       background: rgba(0,0,0,0.45);
@@ -597,6 +630,7 @@
       h1 { font-size: 1rem; }
       #panel { width: 100vw; }
       .field-row { grid-template-columns: 1fr; }
+      #drag-hint-pill { display: none; }
     }
 
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -612,6 +646,8 @@
     </div>
     <div class="header-actions">
       <button class="btn-cloud" id="btn-save-cloud" title="Save all changes to Firebase cloud" hidden>&#9729; Save All</button>
+      <button class="btn-ghost" id="btn-snap-grid" title="Toggle Snap-to-Grid alignment" hidden>&#8862; Snap Grid: ON</button>
+      <button class="btn-ghost" id="btn-auto-arrange" title="Automatically center every child directly under their parents" hidden>&#9783; Auto-Arrange</button>
       <button class="btn-ghost" id="btn-export" title="Download safety backup (.json)">&#8595; Export</button>
       <button class="btn-ghost" id="btn-import" title="Restore from backup file (.json)" hidden>&#8593; Import</button>
       <input type="file" id="import-input" accept=".json,application/json" style="display:none">
@@ -623,7 +659,7 @@
   </header>
 
   <div id="canvas-wrap">
-    <div id="tree-canvas">
+    <div id="tree-canvas" class="show-grid">
       <svg id="connector-svg"></svg>
     </div>
     <div id="empty-state">
@@ -632,6 +668,8 @@
       <div class="empty-sub" id="empty-sub-text">Sign in as editor to add family members.</div>
     </div>
   </div>
+
+  <div id="drag-hint-pill" hidden>Tip: Drag any person left/right to position on grid • Click to edit</div>
 
   <div id="zoom-controls">
     <button class="btn-icon" id="btn-zoom-out" title="Zoom out">&#8722;</button>
@@ -893,17 +931,21 @@
   const btnAuth = document.getElementById('btn-auth');
   const btnAdd = document.getElementById('btn-add');
   const btnSaveCloud = document.getElementById('btn-save-cloud');
+  const btnSnapGrid = document.getElementById('btn-snap-grid');
+  const btnAutoArrange = document.getElementById('btn-auto-arrange');
   const btnImport = document.getElementById('btn-import');
   const btnExport = document.getElementById('btn-export');
   const importInput = document.getElementById('import-input');
   const loginBackdrop = document.getElementById('login-backdrop');
   const loginError = document.getElementById('login-error');
+  const dragHintPill = document.getElementById('drag-hint-pill');
 
   let isEditor = false;
   let isRemoteUpdate = false;
   let hasInitialFit = false;
   let initialCloudLoaded = false;
   let modalMode = 'person';
+  let snapToGrid = true;
 
   /* ── State ── */
   let people = [];
@@ -913,21 +955,31 @@
   let isPanning = false, panStart = null;
   let theme = 'system';
 
-  const NODE_W = 110, NODE_H = 110, NODE_GAP_X = 48, NODE_GAP_Y = 74;
+  const NODE_W = 110, NODE_H = 110, NODE_GAP_X = 50, NODE_GAP_Y = 76;
+  const GRID_STEP = 40;
   const GEN_LABELS = ['Great-grandparents', 'Grandparents', 'Parents', 'Children', 'Grandchildren'];
   const GEN_H = NODE_H + NODE_GAP_Y;
+
+  /* ── Dragging state ── */
+  let dragState = null;
 
   /* ── Auth State Listener ── */
   onAuthStateChanged(auth, (user) => {
     isEditor = !!user;
     updateEditorUI();
+    render();
     if (selectedId) refreshPanelData(selectedId);
   });
 
   function updateEditorUI() {
     btnAdd.hidden = !isEditor;
     btnSaveCloud.hidden = !isEditor;
+    btnSnapGrid.hidden = !isEditor;
+    btnAutoArrange.hidden = !isEditor;
     btnImport.hidden = !isEditor;
+    dragHintPill.hidden = !isEditor;
+    canvas.classList.toggle('show-grid', isEditor && snapToGrid);
+
     btnAuth.textContent = isEditor ? 'Sign Out' : '🔒 Editor Login';
     document.getElementById('readonly-banner').hidden = isEditor;
     document.getElementById('photo-hint').hidden = !isEditor;
@@ -950,6 +1002,25 @@
       document.getElementById('btn-remove-photo').hidden = !(isEditor && p && p.photo);
     }
   }
+
+  /* ── Snap-to-Grid & Auto-Arrange Controls ── */
+  btnSnapGrid.addEventListener('click', () => {
+    snapToGrid = !snapToGrid;
+    btnSnapGrid.textContent = snapToGrid ? '⊞ Snap Grid: ON' : '⊞ Snap Grid: OFF';
+    btnSnapGrid.classList.toggle('active', snapToGrid);
+    canvas.classList.toggle('show-grid', isEditor && snapToGrid);
+  });
+  btnSnapGrid.classList.add('active');
+
+  btnAutoArrange.addEventListener('click', () => {
+    if (!isEditor) return;
+    // Clear manual customX overrides so every parent & couple centers automatically over their children
+    people.forEach(p => { p.customX = null; });
+    syncGenerations();
+    save();
+    render();
+    fitToScreen();
+  });
 
   function openLoginModal() {
     loginError.hidden = true;
@@ -1073,6 +1144,7 @@
       ...p,
       color: p.color || null,
       photo: p.photo || null,
+      customX: (p.customX !== undefined && p.customX !== null && !isNaN(Number(p.customX))) ? Number(p.customX) : null,
       order: (p.order !== undefined && p.order !== null && p.order !== '') ? Number(p.order) : null,
       parents: Array.isArray(p.parents) ? p.parents : [],
       children: Array.isArray(p.children) ? p.children : [],
@@ -1242,10 +1314,11 @@
   try { const t = localStorage.getItem('ftree_theme'); if (t) theme = t; } catch(e) {}
   applyTheme();
 
-  /* ── Layout:
-       1. Centers a hub spouse between 2 wives: [Wife 1] — [Hub] — [Wife 2]
-       2. Groups children separately by each mother (Wife 1's children on left, Wife 2's children on right)
-       3. Creates separate sibling boxes for each mother's children ── */
+  /* ── Recursive Subtree Layout Engine:
+       1. Centers every couple/parent unit directly above their own children's total width
+       2. Places a husband with 2 wives in the middle ([Wife 1] — [Husband] — [Wife 2])
+       3. Separates children under each mother's side
+       4. Respects any manual drag-and-drop customX positions ── */
   function computeLayout() {
     const gens = {};
     people.forEach(p => {
@@ -1256,45 +1329,18 @@
 
     const partnerClusters = [];
     const siblingGroups = [];
+    const memberClusterMap = new Map(); // personId -> ordered array of person objects in same couple/spouse unit
 
+    const baseCompare = (a, b) => {
+      const aOrd = (a.order !== null && a.order !== undefined) ? Number(a.order) : 999999;
+      const bOrd = (b.order !== null && b.order !== undefined) ? Number(b.order) : 999999;
+      if (aOrd !== bOrd) return aOrd - bOrd;
+      return a.id - b.id;
+    };
+
+    // Build spouse clusters per generation
     Object.keys(gens).sort((a, b) => Number(a) - Number(b)).forEach(g => {
       const members = gens[g];
-      const prevGen = gens[parseInt(g) - 1] || [];
-
-      const baseCompare = (a, b) => {
-        // Primary sort by parent position in the generation above (so Wife 1's kids sit left of Wife 2's kids)
-        const aParentIndices = (a.parents || [])
-          .map(pid => prevGen.findIndex(x => x.id === pid))
-          .filter(idx => idx !== -1);
-        const bParentIndices = (b.parents || [])
-          .map(pid => prevGen.findIndex(x => x.id === pid))
-          .filter(idx => idx !== -1);
-
-        // Prefer the non-shared parent (mother) index if parents differ, otherwise average parent index
-        const aOnly = aParentIndices.filter(idx => !bParentIndices.includes(idx));
-        const bOnly = bParentIndices.filter(idx => !aParentIndices.includes(idx));
-
-        const aScore = aOnly.length > 0
-          ? Math.min(...aOnly)
-          : (aParentIndices.length > 0 ? aParentIndices.reduce((s, v) => s + v, 0) / aParentIndices.length : 999);
-        const bScore = bOnly.length > 0
-          ? Math.min(...bOnly)
-          : (bParentIndices.length > 0 ? bParentIndices.reduce((s, v) => s + v, 0) / bParentIndices.length : 999);
-
-        if (aScore !== bScore) return aScore - bScore;
-
-        // Secondary sort by explicit child order (#1, #2, #3...)
-        const aOrd = (a.order !== null && a.order !== undefined) ? Number(a.order) : 999999;
-        const bOrd = (b.order !== null && b.order !== undefined) ? Number(b.order) : 999999;
-        if (aOrd !== bOrd) return aOrd - bOrd;
-
-        return a.id - b.id;
-      };
-
-      members.sort(baseCompare);
-
-      // Build connected partner groups
-      const arranged = [];
       const visited = new Set();
 
       members.forEach(m => {
@@ -1317,7 +1363,7 @@
 
         cluster.sort(baseCompare);
 
-        // If 1 person has 2 partners (e.g. [Hub, Wife 1, Wife 2]), place Hub in the middle: [Wife 1, Hub, Wife 2]
+        // If 1 hub has 2 partners, place Hub in middle: [Wife 1, Hub, Wife 2]
         if (cluster.length === 3) {
           const hub = cluster.find(c => (c.partners || []).filter(pid => cluster.some(x => x.id === pid)).length === 2);
           if (hub) {
@@ -1326,39 +1372,156 @@
           }
         }
 
-        arranged.push(...cluster);
+        cluster.forEach(c => memberClusterMap.set(c.id, cluster));
         if (cluster.length > 1) {
           partnerClusters.push(cluster.map(x => x.id));
         }
       });
 
-      gens[g] = arranged;
-
-      // Group brothers & sisters by exact parent set (so Wife 1's kids and Wife 2's kids get separate dotted boxes)
+      // Group brothers & sisters by exact parent set
       const parentSetMap = new Map();
-      arranged.forEach(m => {
+      members.forEach(m => {
         if (!m.parents || m.parents.length === 0) return;
         const key = [...m.parents].sort((a, b) => a - b).join(',');
         if (!parentSetMap.has(key)) parentSetMap.set(key, []);
         parentSetMap.get(key).push(m.id);
       });
-
       parentSetMap.forEach(groupIds => {
-        if (groupIds.length > 1) {
-          siblingGroups.push(groupIds);
+        if (groupIds.length > 1) siblingGroups.push(groupIds);
+      });
+    });
+
+    // Helper: get all child clusters belonging to a parent cluster, ordered left-to-right by mother & child order
+    function getChildClusters(cluster) {
+      const clusterIds = new Set(cluster.map(c => c.id));
+      const directChildren = people.filter(p =>
+        p.gen === cluster[0].gen + 1 &&
+        (p.parents || []).some(pid => clusterIds.has(pid))
+      );
+
+      // Sort children so left-spouse's kids come first, then right-spouse's kids, then by #order
+      directChildren.sort((a, b) => {
+        const aMotherIdx = cluster.findIndex(c => c.id !== cluster.find(h => (h.partners || []).length > 1)?.id && (a.parents || []).includes(c.id));
+        const bMotherIdx = cluster.findIndex(c => c.id !== cluster.find(h => (h.partners || []).length > 1)?.id && (b.parents || []).includes(c.id));
+        const aSide = aMotherIdx !== -1 ? aMotherIdx : 0;
+        const bSide = bMotherIdx !== -1 ? bMotherIdx : 0;
+        if (aSide !== bSide) return aSide - bSide;
+        return baseCompare(a, b);
+      });
+
+      const seenChildClusters = new Set();
+      const childClusters = [];
+      directChildren.forEach(ch => {
+        const cCluster = memberClusterMap.get(ch.id) || [ch];
+        const key = cCluster[0].id;
+        if (!seenChildClusters.has(key)) {
+          seenChildClusters.add(key);
+          childClusters.push(cCluster);
+        }
+      });
+      return childClusters;
+    }
+
+    // Measure recursive subtree width for each cluster
+    const subtreeWidths = new Map();
+    const visitedMeasure = new Set();
+
+    function measureCluster(cluster) {
+      const key = cluster[0].id;
+      if (subtreeWidths.has(key)) return subtreeWidths.get(key);
+      if (visitedMeasure.has(key)) return cluster.length * NODE_W + (cluster.length - 1) * NODE_GAP_X;
+      visitedMeasure.add(key);
+
+      const selfW = cluster.length * NODE_W + (cluster.length - 1) * NODE_GAP_X;
+      const childClusters = getChildClusters(cluster);
+
+      if (childClusters.length === 0) {
+        subtreeWidths.set(key, selfW);
+        return selfW;
+      }
+
+      const childrenTotalW = childClusters.reduce((sum, cc, idx) => {
+        return sum + measureCluster(cc) + (idx > 0 ? NODE_GAP_X + 20 : 0);
+      }, 0);
+
+      const totalW = Math.max(selfW, childrenTotalW);
+      subtreeWidths.set(key, totalW);
+      return totalW;
+    }
+
+    // Find top-level root clusters (clusters whose members have no parents in the tree)
+    const rootClusters = [];
+    const seenRoots = new Set();
+    Object.keys(gens).sort((a, b) => Number(a) - Number(b)).forEach(g => {
+      gens[g].forEach(m => {
+        const cluster = memberClusterMap.get(m.id) || [m];
+        const key = cluster[0].id;
+        if (seenRoots.has(key)) return;
+        const hasParentInTree = cluster.some(c => (c.parents || []).some(pid => people.some(x => x.id === pid)));
+        if (!hasParentInTree) {
+          seenRoots.add(key);
+          rootClusters.push(cluster);
         }
       });
     });
 
+    rootClusters.sort((a, b) => baseCompare(a[0], b[0]));
+
+    // Place each root subtree side-by-side, centering parents over their children
     const positions = {};
-    Object.entries(gens).forEach(([gen, members]) => {
-      const g = parseInt(gen);
-      const count = members.length;
-      const totalW = count * NODE_W + (count - 1) * NODE_GAP_X;
-      const startX = -totalW / 2 + NODE_W / 2;
-      members.forEach((p, i) => {
-        positions[p.id] = { x: startX + i * (NODE_W + NODE_GAP_X), y: g * GEN_H + 48 };
+    const placedClusters = new Set();
+
+    function placeCluster(cluster, centerX) {
+      const key = cluster[0].id;
+      if (placedClusters.has(key)) return;
+      placedClusters.add(key);
+
+      const selfW = cluster.length * NODE_W + (cluster.length - 1) * NODE_GAP_X;
+      const startX = centerX - selfW / 2;
+      const g = cluster[0].gen;
+
+      cluster.forEach((p, idx) => {
+        const autoX = startX + idx * (NODE_W + NODE_GAP_X);
+        positions[p.id] = {
+          x: (p.customX !== null && p.customX !== undefined) ? p.customX : autoX,
+          y: g * GEN_H + 48
+        };
       });
+
+      const childClusters = getChildClusters(cluster);
+      if (childClusters.length === 0) return;
+
+      const childrenTotalW = childClusters.reduce((sum, cc, idx) => {
+        return sum + measureCluster(cc) + (idx > 0 ? NODE_GAP_X + 20 : 0);
+      }, 0);
+
+      let cursorX = centerX - childrenTotalW / 2;
+      childClusters.forEach(cc => {
+        const w = measureCluster(cc);
+        placeCluster(cc, cursorX + w / 2);
+        cursorX += w + NODE_GAP_X + 20;
+      });
+    }
+
+    const totalRootW = rootClusters.reduce((sum, rc, idx) => {
+      return sum + measureCluster(rc) + (idx > 0 ? NODE_GAP_X * 2 : 0);
+    }, 0);
+
+    let rootCursorX = -totalRootW / 2;
+    rootClusters.forEach(rc => {
+      const w = measureCluster(rc);
+      placeCluster(rc, rootCursorX + w / 2);
+      rootCursorX += w + NODE_GAP_X * 2;
+    });
+
+    // Fallback for any disconnected/cyclic nodes not reached from roots
+    people.forEach(p => {
+      if (!positions[p.id]) {
+        positions[p.id] = {
+          x: (p.customX !== null && p.customX !== undefined) ? p.customX : 0,
+          y: p.gen * GEN_H + 48
+        };
+      }
     });
 
     return { positions, partnerClusters, siblingGroups };
@@ -1374,20 +1537,20 @@
     const { positions: pos, partnerClusters, siblingGroups } = computeLayout();
     const xs = Object.values(pos).map(p => p.x);
     const ys = Object.values(pos).map(p => p.y);
-    const minX = Math.min(...xs) - NODE_W;
-    const maxX = Math.max(...xs) + NODE_W;
+    const minX = Math.min(...xs) - NODE_W * 2;
+    const maxX = Math.max(...xs) + NODE_W * 2;
     const minY = Math.min(...ys) - 60;
-    const maxY = Math.max(...ys) + NODE_H + 20;
-    const W = maxX - minX + 160;
-    const H = maxY - minY + 80;
+    const maxY = Math.max(...ys) + NODE_H + 40;
+    const W = maxX - minX + 240;
+    const H = maxY - minY + 120;
     canvas.style.width = W + 'px';
     canvas.style.height = H + 'px';
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     svg.style.width = W + 'px';
     svg.style.height = H + 'px';
 
-    const ox = -minX + 80;
-    const oy = -minY + 40;
+    const ox = -minX + 120;
+    const oy = -minY + 60;
 
     [...new Set(people.map(p => p.gen))].sort((a, b) => a - b).forEach(g => {
       const lbl = document.createElement('div');
@@ -1397,7 +1560,7 @@
       canvas.appendChild(lbl);
     });
 
-    // 1. Draw outer dotted rectangular boundary around brothers & sisters (separated per mother/parent-pair)
+    // 1. Outer dotted rectangular boundary around brothers & sisters
     siblingGroups.forEach(sibIds => {
       const coords = sibIds.map(id => pos[id]).filter(Boolean);
       if (coords.length < 2) return;
@@ -1416,7 +1579,7 @@
       canvas.appendChild(sBox);
     });
 
-    // 2. Draw inner dotted rectangular enclosure around partners
+    // 2. Inner dotted rectangular enclosure around partners
     partnerClusters.forEach(clusterIds => {
       const clusterCoords = clusterIds.map(id => ({ id, pos: pos[id] })).filter(x => x.pos);
       if (clusterCoords.length < 2) return;
@@ -1460,7 +1623,7 @@
       }
     });
 
-    // 3. Parent -> Child branch lines (routes from midpoint between Mother & Father when both are linked)
+    // 3. Parent -> Child branch lines
     const drawnChildBranches = new Set();
     people.forEach(child => {
       const cp = pos[child.id];
@@ -1475,7 +1638,6 @@
       const cx = cp.x + ox + NODE_W / 2;
       const cy = cp.y + oy;
 
-      // If child has 2 parents who are partners, branch cleanly from the midpoint between those two parents
       if (validParents.length === 2 && (validParents[0].partners || []).includes(validParents[1].id)) {
         const p1 = pos[validParents[0].id];
         const p2 = pos[validParents[1].id];
@@ -1508,12 +1670,12 @@
       }
     });
 
-    // 4. Person nodes
+    // 4. Person nodes with Drag-and-Drop & Snap-to-Grid
     people.forEach(p => {
       const pp = pos[p.id];
       if (!pp) return;
       const node = document.createElement('div');
-      node.className = 'person-node' + (p.id === selectedId ? ' selected' : '');
+      node.className = 'person-node' + (p.id === selectedId ? ' selected' : '') + (isEditor ? ' editable' : '');
       node.style.left = (pp.x + ox) + 'px';
       node.style.top = (pp.y + oy) + 'px';
       node.dataset.id = p.id;
@@ -1561,7 +1723,57 @@
         node.appendChild(yr);
       }
 
-      node.addEventListener('click', e => { e.stopPropagation(); selectPerson(p.id); });
+      // Pointer drag handlers for Editor Mode
+      node.addEventListener('pointerdown', e => {
+        if (!isEditor || e.button !== 0) return;
+        e.stopPropagation();
+        dragState = {
+          personId: p.id,
+          startX: e.clientX,
+          startY: e.clientY,
+          origX: pp.x,
+          moved: false,
+          nodeEl: node
+        };
+        node.setPointerCapture(e.pointerId);
+      });
+
+      node.addEventListener('pointermove', e => {
+        if (!dragState || dragState.personId !== p.id) return;
+        const dx = (e.clientX - dragState.startX) / zoom;
+        const dy = (e.clientY - dragState.startY) / zoom;
+        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+          dragState.moved = true;
+          dragState.nodeEl.classList.add('dragging');
+        }
+        if (!dragState.moved) return;
+
+        let nextX = dragState.origX + dx;
+        if (snapToGrid) {
+          nextX = Math.round(nextX / GRID_STEP) * GRID_STEP;
+        }
+        p.customX = nextX;
+        render();
+      });
+
+      node.addEventListener('pointerup', e => {
+        if (!dragState || dragState.personId !== p.id) return;
+        const wasDragged = dragState.moved;
+        dragState = null;
+        if (wasDragged) {
+          save();
+          render();
+        } else {
+          selectPerson(p.id);
+        }
+      });
+
+      // Fallback click for non-editor view-only mode
+      node.addEventListener('click', e => {
+        e.stopPropagation();
+        if (!isEditor) selectPerson(p.id);
+      });
+
       canvas.appendChild(node);
     });
   }
@@ -1849,7 +2061,7 @@
     render();
   });
 
-  /* ── Add person modal & Quick "+ New Child" modal with selectable mother/father ── */
+  /* ── Add person modal & Quick "+ New Child" modal ── */
   function openNewPersonModal(parentPerson = null) {
     if (!isEditor) return;
     modalMode = parentPerson ? 'child' : 'person';
@@ -1870,7 +2082,6 @@
       let html = '<div>Select Parent(s) for this child:</div><div class="parent-checkbox-list">';
       html += '<label class="parent-checkbox-item"><input type="checkbox" name="modal-parent-cb" value="' + parentPerson.id + '" checked> ' + fullName(parentPerson) + '</label>';
 
-      // If parent has 1 spouse, check both by default; if 2+ spouses, leave spouses unchecked so you pick which wife
       const autoCheckSpouse = partners.length === 1;
       partners.forEach(sp => {
         html += '<label class="parent-checkbox-item"><input type="checkbox" name="modal-parent-cb" value="' + sp.id + '"' + (autoCheckSpouse ? ' checked' : '') + '> ' + fullName(sp) + '</label>';
@@ -1944,6 +2155,7 @@
       last: document.getElementById('new-last').value.trim(),
       birth: document.getElementById('new-birth').value.trim(),
       death: '', notes: '', photo: null,
+      customX: null,
       order: ordVal !== '' ? parseInt(ordVal, 10) : null,
       color: pickedColor === '#7c5c3a' ? null : pickedColor,
       gen: parseInt(document.getElementById('new-gen').value),
@@ -1976,7 +2188,7 @@
   }
 
   wrap.addEventListener('mousedown', e => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || dragState) return;
     if (e.target !== wrap && e.target !== canvas && e.target !== svg) return;
     isPanning = true;
     panStart = { x: e.clientX - panX, y: e.clientY - panY };
@@ -1992,10 +2204,10 @@
 
   let touch0 = null, touch0pan = null;
   wrap.addEventListener('touchstart', e => {
-    if (e.touches.length === 1) { touch0 = e.touches[0]; touch0pan = { x: panX, y: panY }; }
+    if (e.touches.length === 1 && !dragState) { touch0 = e.touches[0]; touch0pan = { x: panX, y: panY }; }
   }, { passive: true });
   wrap.addEventListener('touchmove', e => {
-    if (e.touches.length === 1 && touch0) {
+    if (e.touches.length === 1 && touch0 && !dragState) {
       panX = touch0pan.x + (e.touches[0].clientX - touch0.clientX);
       panY = touch0pan.y + (e.touches[0].clientY - touch0.clientY);
       applyTransform();
@@ -2011,12 +2223,12 @@
     const my = e.clientY - rect.top;
     panX = mx - (mx - panX) * factor;
     panY = my - (my - panY) * factor;
-    zoom = Math.max(0.25, Math.min(3, zoom * factor));
+    zoom = Math.max(0.2, Math.min(3, zoom * factor));
     applyTransform();
   }, { passive: false });
 
   document.getElementById('btn-zoom-in').addEventListener('click', () => { zoom = Math.min(3, zoom * 1.2); applyTransform(); });
-  document.getElementById('btn-zoom-out').addEventListener('click', () => { zoom = Math.max(0.25, zoom / 1.2); applyTransform(); });
+  document.getElementById('btn-zoom-out').addEventListener('click', () => { zoom = Math.max(0.2, zoom / 1.2); applyTransform(); });
 
   function fitToScreen() {
     if (people.length === 0) return;

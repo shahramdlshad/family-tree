@@ -884,8 +884,8 @@
           <input id="new-first" type="text" placeholder="First">
         </div>
         <div class="field">
-          <label for="new-last">Last name</label>
-          <input id="new-last" type="text" placeholder="Last">
+          <label for="new-last">Last name (Father's name)</label>
+          <input id="new-last" type="text" placeholder="Father's name">
         </div>
       </div>
       <div class="field-row">
@@ -1466,7 +1466,7 @@
   try { const t = localStorage.getItem('ftree_theme'); if (t) theme = t; } catch(e) {}
   applyTheme();
 
-  /* ── Recursive Subtree Layout Engine (Supports 2D customX & customY + dynamic boxes) ── */
+  /* ── Recursive Subtree Layout Engine ── */
   function computeLayout() {
     const gens = {};
     people.forEach(p => {
@@ -1711,7 +1711,7 @@
       canvas.appendChild(lbl);
     });
 
-    // 1. Outer dotted rectangular boundary around brothers & sisters (follows vertical & horizontal moves)
+    // 1. Outer dotted rectangular boundary around brothers & sisters
     siblingGroups.forEach(sibIds => {
       const coords = sibIds.map(id => pos[id]).filter(Boolean);
       if (coords.length < 2) return;
@@ -1730,7 +1730,7 @@
       canvas.appendChild(sBox);
     });
 
-    // 2. Inner dotted rectangular enclosure around partners (follows vertical & horizontal moves)
+    // 2. Inner dotted rectangular enclosure around partners
     partnerClusters.forEach(clusterIds => {
       const clusterCoords = clusterIds.map(id => ({ id, pos: pos[id] })).filter(x => x.pos);
       if (clusterCoords.length < 2) return;
@@ -1878,7 +1878,6 @@
         node.appendChild(yr);
       }
 
-      // Pointer drag handlers for Editor Mode (2D: X and Y)
       node.addEventListener('pointerdown', e => {
         if (!isEditor || (e.pointerType === 'mouse' && e.button !== 0)) return;
         e.stopPropagation();
@@ -1943,7 +1942,6 @@
         dragState = null;
       });
 
-      // Click handler for view-only mode
       node.addEventListener('click', e => {
         e.stopPropagation();
         if (!isEditor) selectPerson(p.id);
@@ -2240,6 +2238,31 @@
     render();
   });
 
+  /* ── Helper: Determine father's first name to use as child's last name ── */
+  function resolveFatherFirstName(parentPerson, checkedIds) {
+    // If parentPerson has children or partners, identify the father among the checked parents
+    const checkedParents = checkedIds
+      .map(id => people.find(x => x.id === id))
+      .filter(Boolean);
+
+    if (checkedParents.length === 1) {
+      return checkedParents[0].first || '';
+    }
+    if (checkedParents.length >= 2) {
+      // If one parent has multiple spouses (hub), that parent is the husband/father
+      const hub = checkedParents.find(p => (p.partners || []).length > 1);
+      if (hub) return hub.first || '';
+
+      // If parentPerson is the one who has parents in the tree (bloodline parent), prefer their first name;
+      // otherwise prefer whichever checked parent has parents in the tree (usually the father in patrilineal trees)
+      const bloodlineParent = checkedParents.find(p => (p.parents || []).length > 0);
+      if (bloodlineParent) return bloodlineParent.first || '';
+
+      return parentPerson.first || checkedParents[0].first || '';
+    }
+    return parentPerson ? (parentPerson.first || '') : '';
+  }
+
   /* ── Add person modal & Quick "+ New Child" modal ── */
   function openNewPersonModal(parentPerson = null) {
     if (!isEditor) return;
@@ -2270,7 +2293,19 @@
       hintEl.innerHTML = html;
       hintEl.hidden = false;
 
-      document.getElementById('new-last').value = parentPerson.last || '';
+      // Auto-fill child's last name with the father's first name
+      const initialCheckedIds = [parentPerson.id, ...(autoCheckSpouse && partners[0] ? [partners[0].id] : [])];
+      document.getElementById('new-last').value = resolveFatherFirstName(parentPerson, initialCheckedIds);
+
+      // Update last name dynamically if parent checkboxes are toggled
+      hintEl.querySelectorAll('input[name="modal-parent-cb"]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const checkedNow = Array.from(hintEl.querySelectorAll('input[name="modal-parent-cb"]:checked'))
+            .map(el => parseInt(el.value, 10));
+          document.getElementById('new-last').value = resolveFatherFirstName(parentPerson, checkedNow);
+        });
+      });
+
       const childGen = Math.min(4, parentPerson.gen + 1);
       document.getElementById('new-gen').value = String(childGen);
 
@@ -2362,7 +2397,7 @@
     if (people.length === 1) fitToScreen();
   });
 
-  /* ── Unified Canvas Pan & Zoom (Works anywhere on background + two-finger pinch zoom) ── */
+  /* ── Unified Canvas Pan & Zoom ── */
   function applyTransform() {
     canvas.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
   }

@@ -85,7 +85,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0.65rem max(12px, env(safe-area-inset-left, 0px));
+      padding: 0.6rem max(12px, env(safe-area-inset-left, 0px));
       padding-right: max(12px, env(safe-area-inset-right, 0px));
       background: var(--bg2);
       border-bottom: 1px solid var(--node-border);
@@ -95,17 +95,17 @@
       flex-wrap: wrap;
     }
 
-    .header-left { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
+    .header-left { display: flex; align-items: center; gap: 0.5rem; min-width: 0; flex-wrap: wrap; }
 
     h1 {
       font-family: 'Playfair Display', Georgia, serif;
-      font-size: 1.2rem;
+      font-size: 1.15rem;
       font-weight: 600;
       color: var(--accent);
       white-space: nowrap;
     }
 
-    .sync-badge {
+    .sync-badge, .stats-badge {
       font-size: 0.7rem;
       font-weight: 600;
       padding: 0.2rem 0.55rem;
@@ -118,6 +118,54 @@
     .sync-badge.live { color: #2e7d32; border-color: color-mix(in srgb, #2e7d32 40%, transparent); }
     .sync-badge.err { color: #c0392b; border-color: color-mix(in srgb, #c0392b 40%, transparent); }
 
+    /* Search box */
+    .search-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    #search-input {
+      font-family: inherit;
+      font-size: 0.8rem;
+      color: var(--fg);
+      background: var(--bg);
+      border: 1px solid var(--node-border);
+      border-radius: 6px;
+      padding: 0.35rem 0.65rem;
+      width: 165px;
+      outline: none;
+      transition: border-color 0.15s, width 0.2s;
+    }
+    #search-input:focus {
+      border-color: var(--accent);
+      width: 205px;
+    }
+    #search-results {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      width: 240px;
+      max-height: 260px;
+      overflow-y: auto;
+      background: var(--panel-bg);
+      border: 1px solid var(--node-border);
+      border-radius: 8px;
+      box-shadow: var(--shadow-hover);
+      z-index: 60;
+    }
+    .search-item {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid color-mix(in srgb, var(--node-border) 50%, transparent);
+    }
+    .search-item:last-child { border-bottom: none; }
+    .search-item:hover { background: color-mix(in srgb, var(--accent) 14%, var(--bg)); }
+    .search-item span.meta { font-size: 0.7rem; color: var(--fg3); }
+
     .header-actions { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 
     button {
@@ -127,7 +175,7 @@
       cursor: pointer;
       border: none;
       border-radius: 6px;
-      padding: 0.4rem 0.7rem;
+      padding: 0.4rem 0.65rem;
       transition: background 0.15s, transform 0.1s, border-color 0.15s;
       white-space: nowrap;
     }
@@ -167,6 +215,7 @@
       overflow: hidden;
       position: relative;
       cursor: grab;
+      touch-action: none;
     }
     #canvas-wrap.panning { cursor: grabbing; }
 
@@ -174,6 +223,7 @@
       position: absolute;
       top: 0; left: 0;
       transform-origin: 0 0;
+      pointer-events: none;
     }
 
     #tree-canvas.show-grid {
@@ -224,6 +274,8 @@
       cursor: pointer;
       z-index: 2;
       user-select: none;
+      pointer-events: auto;
+      touch-action: none;
     }
 
     .person-node.editable {
@@ -630,7 +682,8 @@
       h1 { font-size: 1rem; }
       #panel { width: 100vw; }
       .field-row { grid-template-columns: 1fr; }
-      #drag-hint-pill { display: none; }
+      #drag-hint-pill, .stats-badge { display: none; }
+      #search-input { width: 120px; }
     }
 
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -643,10 +696,16 @@
     <div class="header-left">
       <h1>Family Tree</h1>
       <span id="sync-status" class="sync-badge">Connecting...</span>
+      <span id="stats-badge" class="stats-badge">0 people</span>
+      <div class="search-wrap">
+        <input id="search-input" type="search" placeholder="🔍 Find person..." autocomplete="off">
+        <div id="search-results" hidden></div>
+      </div>
     </div>
     <div class="header-actions">
       <button class="btn-cloud" id="btn-save-cloud" title="Save all changes to Firebase cloud" hidden>&#9729; Save All</button>
       <button class="btn-ghost" id="btn-snap-grid" title="Toggle Snap-to-Grid alignment" hidden>&#8862; Snap Grid: ON</button>
+      <button class="btn-ghost" id="btn-move-branch" title="Move entire branch of descendants when dragging a parent" hidden>&#9095; Move Branch: OFF</button>
       <button class="btn-ghost" id="btn-auto-arrange" title="Automatically center every child directly under their parents" hidden>&#9783; Auto-Arrange</button>
       <button class="btn-ghost" id="btn-export" title="Download safety backup (.json)">&#8595; Export</button>
       <button class="btn-ghost" id="btn-import" title="Restore from backup file (.json)" hidden>&#8593; Import</button>
@@ -669,7 +728,7 @@
     </div>
   </div>
 
-  <div id="drag-hint-pill" hidden>Tip: Drag any person left/right to position on grid • Click to edit</div>
+  <div id="drag-hint-pill" hidden>Tip: Drag background to pan • Drag any person horizontally or vertically (dotted boxes follow)</div>
 
   <div id="zoom-controls">
     <button class="btn-icon" id="btn-zoom-out" title="Zoom out">&#8722;</button>
@@ -928,10 +987,12 @@
   const treeRef = ref(db, 'familyTreeData');
 
   const syncBadge = document.getElementById('sync-status');
+  const statsBadge = document.getElementById('stats-badge');
   const btnAuth = document.getElementById('btn-auth');
   const btnAdd = document.getElementById('btn-add');
   const btnSaveCloud = document.getElementById('btn-save-cloud');
   const btnSnapGrid = document.getElementById('btn-snap-grid');
+  const btnMoveBranch = document.getElementById('btn-move-branch');
   const btnAutoArrange = document.getElementById('btn-auto-arrange');
   const btnImport = document.getElementById('btn-import');
   const btnExport = document.getElementById('btn-export');
@@ -939,6 +1000,8 @@
   const loginBackdrop = document.getElementById('login-backdrop');
   const loginError = document.getElementById('login-error');
   const dragHintPill = document.getElementById('drag-hint-pill');
+  const searchInput = document.getElementById('search-input');
+  const searchResults = document.getElementById('search-results');
 
   let isEditor = false;
   let isRemoteUpdate = false;
@@ -946,22 +1009,26 @@
   let initialCloudLoaded = false;
   let modalMode = 'person';
   let snapToGrid = true;
+  let moveBranchMode = false;
 
   /* ── State ── */
   let people = [];
   let nextId = 1;
   let selectedId = null;
   let panX = 0, panY = 0, zoom = 1;
-  let isPanning = false, panStart = null;
   let theme = 'system';
+  let lastRenderedLayout = { positions: {}, ox: 0, oy: 0 };
 
   const NODE_W = 110, NODE_H = 110, NODE_GAP_X = 50, NODE_GAP_Y = 76;
   const GRID_STEP = 40;
   const GEN_LABELS = ['Great-grandparents', 'Grandparents', 'Parents', 'Children', 'Grandchildren'];
   const GEN_H = NODE_H + NODE_GAP_Y;
 
-  /* ── Dragging state ── */
+  /* ── Dragging & Panning State ── */
   let dragState = null;
+  let panState = null;
+  let activeTouches = new Map();
+  let pinchStart = null;
 
   /* ── Auth State Listener ── */
   onAuthStateChanged(auth, (user) => {
@@ -975,6 +1042,7 @@
     btnAdd.hidden = !isEditor;
     btnSaveCloud.hidden = !isEditor;
     btnSnapGrid.hidden = !isEditor;
+    btnMoveBranch.hidden = !isEditor;
     btnAutoArrange.hidden = !isEditor;
     btnImport.hidden = !isEditor;
     dragHintPill.hidden = !isEditor;
@@ -1003,7 +1071,7 @@
     }
   }
 
-  /* ── Snap-to-Grid & Auto-Arrange Controls ── */
+  /* ── Snap-to-Grid, Move Branch & Auto-Arrange Controls ── */
   btnSnapGrid.addEventListener('click', () => {
     snapToGrid = !snapToGrid;
     btnSnapGrid.textContent = snapToGrid ? '⊞ Snap Grid: ON' : '⊞ Snap Grid: OFF';
@@ -1012,15 +1080,70 @@
   });
   btnSnapGrid.classList.add('active');
 
+  btnMoveBranch.addEventListener('click', () => {
+    moveBranchMode = !moveBranchMode;
+    btnMoveBranch.textContent = moveBranchMode ? '⎇ Move Branch: ON' : '⎇ Move Branch: OFF';
+    btnMoveBranch.classList.toggle('active', moveBranchMode);
+  });
+
   btnAutoArrange.addEventListener('click', () => {
     if (!isEditor) return;
-    // Clear manual customX overrides so every parent & couple centers automatically over their children
-    people.forEach(p => { p.customX = null; });
+    people.forEach(p => {
+      p.customX = null;
+      p.customY = null;
+    });
     syncGenerations();
     save();
     render();
     fitToScreen();
   });
+
+  /* ── Search & Jump to Person ── */
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim().toLowerCase();
+    if (!q) {
+      searchResults.hidden = true;
+      searchResults.innerHTML = '';
+      return;
+    }
+    const matches = people.filter(p => fullName(p).toLowerCase().includes(q) || (p.birth || '').includes(q));
+    if (matches.length === 0) {
+      searchResults.innerHTML = '<div class="search-item"><span class="meta">No match found</span></div>';
+      searchResults.hidden = false;
+      return;
+    }
+    searchResults.innerHTML = matches.slice(0, 12).map(p => {
+      const genName = GEN_LABELS[p.gen] || ('Gen ' + p.gen);
+      return '<div class="search-item" data-id="' + p.id + '"><span>' + fullName(p) + '</span><span class="meta">' + genName + '</span></div>';
+    }).join('');
+    searchResults.hidden = false;
+  });
+
+  searchResults.addEventListener('click', e => {
+    const item = e.target.closest('.search-item[data-id]');
+    if (!item) return;
+    const id = parseInt(item.dataset.id, 10);
+    searchResults.hidden = true;
+    searchInput.value = '';
+    focusPerson(id);
+  });
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.search-wrap')) searchResults.hidden = true;
+  });
+
+  function focusPerson(id) {
+    const pp = lastRenderedLayout.positions[id];
+    if (!pp) return;
+    const rect = wrap.getBoundingClientRect();
+    const targetX = pp.x + lastRenderedLayout.ox + NODE_W / 2;
+    const targetY = pp.y + lastRenderedLayout.oy + NODE_H / 2;
+    zoom = Math.max(zoom, 1);
+    panX = rect.width / 2 - targetX * zoom;
+    panY = rect.height / 2 - targetY * zoom;
+    applyTransform();
+    selectPerson(id);
+  }
 
   function openLoginModal() {
     loginError.hidden = true;
@@ -1145,6 +1268,7 @@
       color: p.color || null,
       photo: p.photo || null,
       customX: (p.customX !== undefined && p.customX !== null && !isNaN(Number(p.customX))) ? Number(p.customX) : null,
+      customY: (p.customY !== undefined && p.customY !== null && !isNaN(Number(p.customY))) ? Number(p.customY) : null,
       order: (p.order !== undefined && p.order !== null && p.order !== '') ? Number(p.order) : null,
       parents: Array.isArray(p.parents) ? p.parents : [],
       children: Array.isArray(p.children) ? p.children : [],
@@ -1290,6 +1414,34 @@
     }
   }
 
+  /* ── Collect all descendants + spouses for Move Branch Mode ── */
+  function getBranchMemberIds(rootPersonId) {
+    const ids = new Set();
+    const queue = [rootPersonId];
+    ids.add(rootPersonId);
+
+    while (queue.length > 0) {
+      const currId = queue.shift();
+      const curr = people.find(x => x.id === currId);
+      if (!curr) continue;
+
+      (curr.partners || []).forEach(pid => {
+        if (!ids.has(pid)) {
+          ids.add(pid);
+          queue.push(pid);
+        }
+      });
+
+      (curr.children || []).forEach(cid => {
+        if (!ids.has(cid)) {
+          ids.add(cid);
+          queue.push(cid);
+        }
+      });
+    }
+    return ids;
+  }
+
   /* ── DOM refs ── */
   const canvas = document.getElementById('tree-canvas');
   const svg = document.getElementById('connector-svg');
@@ -1314,11 +1466,7 @@
   try { const t = localStorage.getItem('ftree_theme'); if (t) theme = t; } catch(e) {}
   applyTheme();
 
-  /* ── Recursive Subtree Layout Engine:
-       1. Centers every couple/parent unit directly above their own children's total width
-       2. Places a husband with 2 wives in the middle ([Wife 1] — [Husband] — [Wife 2])
-       3. Separates children under each mother's side
-       4. Respects any manual drag-and-drop customX positions ── */
+  /* ── Recursive Subtree Layout Engine (Supports 2D customX & customY + dynamic boxes) ── */
   function computeLayout() {
     const gens = {};
     people.forEach(p => {
@@ -1329,7 +1477,7 @@
 
     const partnerClusters = [];
     const siblingGroups = [];
-    const memberClusterMap = new Map(); // personId -> ordered array of person objects in same couple/spouse unit
+    const memberClusterMap = new Map();
 
     const baseCompare = (a, b) => {
       const aOrd = (a.order !== null && a.order !== undefined) ? Number(a.order) : 999999;
@@ -1338,7 +1486,6 @@
       return a.id - b.id;
     };
 
-    // Build spouse clusters per generation
     Object.keys(gens).sort((a, b) => Number(a) - Number(b)).forEach(g => {
       const members = gens[g];
       const visited = new Set();
@@ -1363,7 +1510,6 @@
 
         cluster.sort(baseCompare);
 
-        // If 1 hub has 2 partners, place Hub in middle: [Wife 1, Hub, Wife 2]
         if (cluster.length === 3) {
           const hub = cluster.find(c => (c.partners || []).filter(pid => cluster.some(x => x.id === pid)).length === 2);
           if (hub) {
@@ -1378,7 +1524,6 @@
         }
       });
 
-      // Group brothers & sisters by exact parent set
       const parentSetMap = new Map();
       members.forEach(m => {
         if (!m.parents || m.parents.length === 0) return;
@@ -1391,7 +1536,6 @@
       });
     });
 
-    // Helper: get all child clusters belonging to a parent cluster, ordered left-to-right by mother & child order
     function getChildClusters(cluster) {
       const clusterIds = new Set(cluster.map(c => c.id));
       const directChildren = people.filter(p =>
@@ -1399,10 +1543,10 @@
         (p.parents || []).some(pid => clusterIds.has(pid))
       );
 
-      // Sort children so left-spouse's kids come first, then right-spouse's kids, then by #order
       directChildren.sort((a, b) => {
-        const aMotherIdx = cluster.findIndex(c => c.id !== cluster.find(h => (h.partners || []).length > 1)?.id && (a.parents || []).includes(c.id));
-        const bMotherIdx = cluster.findIndex(c => c.id !== cluster.find(h => (h.partners || []).length > 1)?.id && (b.parents || []).includes(c.id));
+        const hubId = cluster.find(h => (h.partners || []).length > 1)?.id;
+        const aMotherIdx = cluster.findIndex(c => c.id !== hubId && (a.parents || []).includes(c.id));
+        const bMotherIdx = cluster.findIndex(c => c.id !== hubId && (b.parents || []).includes(c.id));
         const aSide = aMotherIdx !== -1 ? aMotherIdx : 0;
         const bSide = bMotherIdx !== -1 ? bMotherIdx : 0;
         if (aSide !== bSide) return aSide - bSide;
@@ -1422,7 +1566,6 @@
       return childClusters;
     }
 
-    // Measure recursive subtree width for each cluster
     const subtreeWidths = new Map();
     const visitedMeasure = new Set();
 
@@ -1449,7 +1592,6 @@
       return totalW;
     }
 
-    // Find top-level root clusters (clusters whose members have no parents in the tree)
     const rootClusters = [];
     const seenRoots = new Set();
     Object.keys(gens).sort((a, b) => Number(a) - Number(b)).forEach(g => {
@@ -1467,7 +1609,6 @@
 
     rootClusters.sort((a, b) => baseCompare(a[0], b[0]));
 
-    // Place each root subtree side-by-side, centering parents over their children
     const positions = {};
     const placedClusters = new Set();
 
@@ -1482,9 +1623,10 @@
 
       cluster.forEach((p, idx) => {
         const autoX = startX + idx * (NODE_W + NODE_GAP_X);
+        const autoY = g * GEN_H + 48;
         positions[p.id] = {
           x: (p.customX !== null && p.customX !== undefined) ? p.customX : autoX,
-          y: g * GEN_H + 48
+          y: (p.customY !== null && p.customY !== undefined) ? p.customY : autoY
         };
       });
 
@@ -1514,12 +1656,11 @@
       rootCursorX += w + NODE_GAP_X * 2;
     });
 
-    // Fallback for any disconnected/cyclic nodes not reached from roots
     people.forEach(p => {
       if (!positions[p.id]) {
         positions[p.id] = {
           x: (p.customX !== null && p.customX !== undefined) ? p.customX : 0,
-          y: p.gen * GEN_H + 48
+          y: (p.customY !== null && p.customY !== undefined) ? p.customY : (p.gen * GEN_H + 48)
         };
       }
     });
@@ -1532,35 +1673,45 @@
     Array.from(canvas.querySelectorAll('.person-node,.partner-heart,.gen-label,.couple-box,.sibling-box')).forEach(el => el.remove());
     svg.innerHTML = '';
     emptyState.classList.toggle('hidden', people.length > 0);
+
+    const genCount = new Set(people.map(p => p.gen)).size;
+    statsBadge.textContent = people.length + (people.length === 1 ? ' person' : ' people') + (genCount > 0 ? ' • ' + genCount + ' gen' : '');
+
     if (people.length === 0) return;
 
     const { positions: pos, partnerClusters, siblingGroups } = computeLayout();
     const xs = Object.values(pos).map(p => p.x);
     const ys = Object.values(pos).map(p => p.y);
-    const minX = Math.min(...xs) - NODE_W * 2;
-    const maxX = Math.max(...xs) + NODE_W * 2;
-    const minY = Math.min(...ys) - 60;
-    const maxY = Math.max(...ys) + NODE_H + 40;
-    const W = maxX - minX + 240;
-    const H = maxY - minY + 120;
+    const minX = Math.min(...xs) - NODE_W * 3;
+    const maxX = Math.max(...xs) + NODE_W * 3;
+    const minY = Math.min(...ys) - 120;
+    const maxY = Math.max(...ys) + NODE_H + 160;
+    const W = maxX - minX + 320;
+    const H = maxY - minY + 240;
     canvas.style.width = W + 'px';
     canvas.style.height = H + 'px';
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     svg.style.width = W + 'px';
     svg.style.height = H + 'px';
 
-    const ox = -minX + 120;
-    const oy = -minY + 60;
+    const ox = -minX + 160;
+    const oy = -minY + 120;
+    lastRenderedLayout = { positions: pos, ox, oy };
 
     [...new Set(people.map(p => p.gen))].sort((a, b) => a - b).forEach(g => {
+      const genMembers = people.filter(p => p.gen === g && pos[p.id]);
+      const avgY = genMembers.length > 0
+        ? Math.min(...genMembers.map(p => pos[p.id].y))
+        : (g * GEN_H + 48);
+
       const lbl = document.createElement('div');
       lbl.className = 'gen-label';
       lbl.textContent = GEN_LABELS[g] || ('Generation ' + g);
-      lbl.style.top = (g * GEN_H + oy) + 'px';
+      lbl.style.top = (avgY - 24 + oy) + 'px';
       canvas.appendChild(lbl);
     });
 
-    // 1. Outer dotted rectangular boundary around brothers & sisters
+    // 1. Outer dotted rectangular boundary around brothers & sisters (follows vertical & horizontal moves)
     siblingGroups.forEach(sibIds => {
       const coords = sibIds.map(id => pos[id]).filter(Boolean);
       if (coords.length < 2) return;
@@ -1579,7 +1730,7 @@
       canvas.appendChild(sBox);
     });
 
-    // 2. Inner dotted rectangular enclosure around partners
+    // 2. Inner dotted rectangular enclosure around partners (follows vertical & horizontal moves)
     partnerClusters.forEach(clusterIds => {
       const clusterCoords = clusterIds.map(id => ({ id, pos: pos[id] })).filter(x => x.pos);
       if (clusterCoords.length < 2) return;
@@ -1605,20 +1756,22 @@
 
         const x1 = leftMember.pos.x + ox + NODE_W - 16;
         const x2 = rightMember.pos.x + ox + 16;
-        const y = leftMember.pos.y + oy + 36;
+        const y1 = leftMember.pos.y + oy + 36;
+        const y2 = rightMember.pos.y + oy + 36;
 
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', x1); line.setAttribute('y1', y);
-        line.setAttribute('x2', x2); line.setAttribute('y2', y);
+        line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+        line.setAttribute('x2', x2); line.setAttribute('y2', y2);
         line.setAttribute('class', 'partner-line');
         svg.appendChild(line);
 
         const hx = (x1 + x2) / 2;
+        const hy = (y1 + y2) / 2;
         const heart = document.createElement('div');
         heart.className = 'partner-heart';
         heart.textContent = '♥';
         heart.style.left = (hx - 9) + 'px';
-        heart.style.top = (y - 10) + 'px';
+        heart.style.top = (hy - 10) + 'px';
         canvas.appendChild(heart);
       }
     });
@@ -1642,11 +1795,12 @@
         const p1 = pos[validParents[0].id];
         const p2 = pos[validParents[1].id];
         const px = ((p1.x + p2.x) / 2) + ox + NODE_W / 2;
-        const py = Math.max(p1.y, p2.y) + oy;
+        const py = ((p1.y + p2.y) / 2) + oy;
 
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const my = cy - 22;
-        path.setAttribute('d', 'M' + px + ',' + (py + NODE_H - 18) + ' C' + px + ',' + my + ' ' + cx + ',' + my + ' ' + cx + ',' + cy);
+        const startY = py + NODE_H - 18;
+        const my = (startY + cy) / 2;
+        path.setAttribute('d', 'M' + px + ',' + startY + ' C' + px + ',' + my + ' ' + cx + ',' + my + ' ' + cx + ',' + cy);
         path.setAttribute('class', 'connector-line');
         const branchColor = validParents[1].color || validParents[0].color;
         if (branchColor) path.style.stroke = branchColor;
@@ -1661,8 +1815,9 @@
           const py = pp.y + oy;
 
           const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          const my = cy - 22;
-          path.setAttribute('d', 'M' + px + ',' + (py + NODE_H) + ' C' + px + ',' + my + ' ' + cx + ',' + my + ' ' + cx + ',' + cy);
+          const startY = py + NODE_H;
+          const my = (startY + cy) / 2;
+          path.setAttribute('d', 'M' + px + ',' + startY + ' C' + px + ',' + my + ' ' + cx + ',' + my + ' ' + cx + ',' + cy);
           path.setAttribute('class', 'connector-line');
           if (p.color) path.style.stroke = p.color;
           svg.appendChild(path);
@@ -1670,7 +1825,7 @@
       }
     });
 
-    // 4. Person nodes with Drag-and-Drop & Snap-to-Grid
+    // 4. Person nodes with 2D Drag-and-Drop (Horizontal + Vertical)
     people.forEach(p => {
       const pp = pos[p.id];
       if (!pp) return;
@@ -1723,41 +1878,57 @@
         node.appendChild(yr);
       }
 
-      // Pointer drag handlers for Editor Mode
+      // Pointer drag handlers for Editor Mode (2D: X and Y)
       node.addEventListener('pointerdown', e => {
-        if (!isEditor || e.button !== 0) return;
+        if (!isEditor || (e.pointerType === 'mouse' && e.button !== 0)) return;
         e.stopPropagation();
+
+        const targetIds = moveBranchMode ? getBranchMemberIds(p.id) : new Set([p.id]);
+        const origPositions = new Map();
+        targetIds.forEach(tid => {
+          const tPos = pos[tid];
+          if (tPos) origPositions.set(tid, { x: tPos.x, y: tPos.y });
+        });
+
         dragState = {
           personId: p.id,
+          pointerId: e.pointerId,
           startX: e.clientX,
           startY: e.clientY,
-          origX: pp.x,
-          moved: false,
-          nodeEl: node
+          origPositions,
+          moved: false
         };
         node.setPointerCapture(e.pointerId);
       });
 
       node.addEventListener('pointermove', e => {
-        if (!dragState || dragState.personId !== p.id) return;
+        if (!dragState || dragState.personId !== p.id || dragState.pointerId !== e.pointerId) return;
         const dx = (e.clientX - dragState.startX) / zoom;
         const dy = (e.clientY - dragState.startY) / zoom;
+
         if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
           dragState.moved = true;
-          dragState.nodeEl.classList.add('dragging');
         }
         if (!dragState.moved) return;
 
-        let nextX = dragState.origX + dx;
-        if (snapToGrid) {
-          nextX = Math.round(nextX / GRID_STEP) * GRID_STEP;
-        }
-        p.customX = nextX;
+        dragState.origPositions.forEach((orig, tid) => {
+          const targetPerson = people.find(x => x.id === tid);
+          if (!targetPerson) return;
+          let nextX = orig.x + dx;
+          let nextY = orig.y + dy;
+          if (snapToGrid) {
+            nextX = Math.round(nextX / GRID_STEP) * GRID_STEP;
+            nextY = Math.round(nextY / GRID_STEP) * GRID_STEP;
+          }
+          targetPerson.customX = nextX;
+          targetPerson.customY = nextY;
+        });
+
         render();
       });
 
       node.addEventListener('pointerup', e => {
-        if (!dragState || dragState.personId !== p.id) return;
+        if (!dragState || dragState.personId !== p.id || dragState.pointerId !== e.pointerId) return;
         const wasDragged = dragState.moved;
         dragState = null;
         if (wasDragged) {
@@ -1768,7 +1939,11 @@
         }
       });
 
-      // Fallback click for non-editor view-only mode
+      node.addEventListener('pointercancel', () => {
+        dragState = null;
+      });
+
+      // Click handler for view-only mode
       node.addEventListener('click', e => {
         e.stopPropagation();
         if (!isEditor) selectPerson(p.id);
@@ -1976,7 +2151,11 @@
     p.last = document.getElementById('edit-last').value.trim();
     p.birth = document.getElementById('edit-birth').value.trim();
     p.death = document.getElementById('edit-death').value.trim();
-    p.gen = parseInt(document.getElementById('edit-gen').value);
+    const newGen = parseInt(document.getElementById('edit-gen').value);
+    if (p.gen !== newGen) {
+      p.gen = newGen;
+      p.customY = null;
+    }
     const ordVal = document.getElementById('edit-order').value.trim();
     p.order = ordVal !== '' ? parseInt(ordVal, 10) : null;
     p.notes = document.getElementById('edit-notes').value.trim();
@@ -2156,6 +2335,7 @@
       birth: document.getElementById('new-birth').value.trim(),
       death: '', notes: '', photo: null,
       customX: null,
+      customY: null,
       order: ordVal !== '' ? parseInt(ordVal, 10) : null,
       color: pickedColor === '#7c5c3a' ? null : pickedColor,
       gen: parseInt(document.getElementById('new-gen').value),
@@ -2182,38 +2362,89 @@
     if (people.length === 1) fitToScreen();
   });
 
-  /* ── Pan & zoom ── */
+  /* ── Unified Canvas Pan & Zoom (Works anywhere on background + two-finger pinch zoom) ── */
   function applyTransform() {
     canvas.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
   }
 
-  wrap.addEventListener('mousedown', e => {
-    if (e.button !== 0 || dragState) return;
-    if (e.target !== wrap && e.target !== canvas && e.target !== svg) return;
-    isPanning = true;
-    panStart = { x: e.clientX - panX, y: e.clientY - panY };
+  wrap.addEventListener('pointerdown', e => {
+    if (dragState) return;
+    if (e.target.closest('.person-node')) return;
+
+    activeTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activeTouches.size === 2) {
+      const pts = Array.from(activeTouches.values());
+      const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      const midX = (pts[0].x + pts[1].x) / 2;
+      const midY = (pts[0].y + pts[1].y) / 2;
+      pinchStart = { dist, zoom, panX, panY, midX, midY };
+      panState = null;
+      return;
+    }
+
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+    panState = {
+      pointerId: e.pointerId,
+      startX: e.clientX - panX,
+      startY: e.clientY - panY,
+      rawX: e.clientX,
+      rawY: e.clientY,
+      moved: false
+    };
     wrap.classList.add('panning');
+    wrap.setPointerCapture(e.pointerId);
   });
-  window.addEventListener('mousemove', e => {
-    if (!isPanning) return;
-    panX = e.clientX - panStart.x;
-    panY = e.clientY - panStart.y;
+
+  wrap.addEventListener('pointermove', e => {
+    if (activeTouches.has(e.pointerId)) {
+      activeTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+
+    if (activeTouches.size === 2 && pinchStart) {
+      const pts = Array.from(activeTouches.values());
+      const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      const rect = wrap.getBoundingClientRect();
+      const midX = (pts[0].x + pts[1].x) / 2 - rect.left;
+      const midY = (pts[0].y + pts[1].y) / 2 - rect.top;
+      const factor = dist / Math.max(1, pinchStart.dist);
+      const nextZoom = Math.max(0.2, Math.min(3, pinchStart.zoom * factor));
+      const appliedFactor = nextZoom / pinchStart.zoom;
+      panX = midX - (pinchStart.midX - rect.left - pinchStart.panX) * appliedFactor;
+      panY = midY - (pinchStart.midY - rect.top - pinchStart.panY) * appliedFactor;
+      zoom = nextZoom;
+      applyTransform();
+      return;
+    }
+
+    if (!panState || panState.pointerId !== e.pointerId) return;
+    if (Math.abs(e.clientX - panState.rawX) > 4 || Math.abs(e.clientY - panState.rawY) > 4) {
+      panState.moved = true;
+    }
+    panX = e.clientX - panState.startX;
+    panY = e.clientY - panState.startY;
     applyTransform();
   });
-  window.addEventListener('mouseup', () => { isPanning = false; wrap.classList.remove('panning'); });
 
-  let touch0 = null, touch0pan = null;
-  wrap.addEventListener('touchstart', e => {
-    if (e.touches.length === 1 && !dragState) { touch0 = e.touches[0]; touch0pan = { x: panX, y: panY }; }
-  }, { passive: true });
-  wrap.addEventListener('touchmove', e => {
-    if (e.touches.length === 1 && touch0 && !dragState) {
-      panX = touch0pan.x + (e.touches[0].clientX - touch0.clientX);
-      panY = touch0pan.y + (e.touches[0].clientY - touch0.clientY);
-      applyTransform();
+  function endPan(e) {
+    activeTouches.delete(e.pointerId);
+    if (activeTouches.size < 2) pinchStart = null;
+
+    if (panState && panState.pointerId === e.pointerId) {
+      const wasMoved = panState.moved;
+      panState = null;
+      wrap.classList.remove('panning');
+      if (!wasMoved && !e.target.closest('.person-node')) {
+        panel.classList.remove('open');
+        selectedId = null;
+        render();
+      }
     }
-  }, { passive: true });
-  wrap.addEventListener('touchend', () => { touch0 = null; });
+  }
+
+  wrap.addEventListener('pointerup', endPan);
+  wrap.addEventListener('pointercancel', endPan);
 
   wrap.addEventListener('wheel', e => {
     e.preventDefault();
@@ -2232,24 +2463,27 @@
 
   function fitToScreen() {
     if (people.length === 0) return;
+    const pos = lastRenderedLayout.positions;
+    const ids = Object.keys(pos);
+    if (ids.length === 0) return;
+
+    const xs = ids.map(id => pos[id].x + lastRenderedLayout.ox);
+    const ys = ids.map(id => pos[id].y + lastRenderedLayout.oy);
+    const left = Math.min(...xs) - 40;
+    const right = Math.max(...xs) + NODE_W + 40;
+    const top = Math.min(...ys) - 50;
+    const bottom = Math.max(...ys) + NODE_H + 50;
+
+    const boxW = Math.max(200, right - left);
+    const boxH = Math.max(200, bottom - top);
     const rect = wrap.getBoundingClientRect();
-    const cW = parseFloat(canvas.style.width) || 400;
-    const cH = parseFloat(canvas.style.height) || 400;
-    zoom = Math.min(1, Math.min(rect.width / cW, rect.height / cH) * 0.85);
-    panX = (rect.width - cW * zoom) / 2;
-    panY = (rect.height - cH * zoom) / 2;
+    zoom = Math.min(1, Math.min(rect.width / boxW, rect.height / boxH) * 0.88);
+    panX = (rect.width - boxW * zoom) / 2 - left * zoom;
+    panY = (rect.height - boxH * zoom) / 2 - top * zoom;
     applyTransform();
   }
 
   document.getElementById('btn-fit').addEventListener('click', fitToScreen);
-
-  wrap.addEventListener('click', e => {
-    if (e.target === wrap || e.target === canvas || e.target === svg) {
-      panel.classList.remove('open');
-      selectedId = null;
-      render();
-    }
-  });
 
   /* ── Init ── */
   updateEditorUI();
